@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
-	"math/rand"
 	"slices"
 	"time"
 
 	"github.com/rs/xid"
 
 	"cyber-ecosystem/shared-go/kratos/security"
+	"cyber-ecosystem/shared-go/utils"
 
 	"cyber-ecosystem/app/services/system/internal/conf"
 	"cyber-ecosystem/app/services/system/internal/ent"
@@ -85,7 +85,9 @@ func (s *DemoSeed) Run(ctx context.Context) error {
 
 	tenant := security.DefaultTenant
 	today := startOfDay(time.Now())
-	rng := rand.New(rand.NewSource(demoSeed))
+	// 固定种子的确定性流：同一份数据每次启动都一样（demo 系列的可复现性就是需求，
+	// 非 crypto 语境 —— 故不走 math/rand/crypto/rand，用内联 splitmix64）。
+	rng := &demoRng{state: demoSeed}
 	days := buildDays(rng, today)
 	if err := s.seedRollups(ctx, client, tenant, days); err != nil {
 		return err
@@ -114,7 +116,7 @@ type demoDay struct {
 	tests  int64
 }
 
-func buildDays(rng *rand.Rand, today time.Time) []*demoDay {
+func buildDays(rng *demoRng, today time.Time) []*demoDay {
 	out := make([]*demoDay, 0, rollupDays)
 	for i := rollupDays - 1; i >= 0; i-- {
 		regs := int64(math.Round(baseRegsToday / math.Pow(dailyDecay, float64(i))))
@@ -177,7 +179,7 @@ var levelWeights = []float64{
 	0.65, 0.24, 0.09, 0.02,
 }
 
-func buildReferrals(rng *rand.Rand, days []*demoDay, roster []*demoUser) []*demoEdge {
+func buildReferrals(rng *demoRng, days []*demoDay, roster []*demoUser) []*demoEdge {
 	// 按天造边（dayAgo 从大到小）：被邀人是当天注册队列里的一员
 	// （邀请 → 当天注册），referrer 只从「注册更早且层级正好低一级」的人里挑，
 	// 于是层级天然形成金字塔，且不会出现环。
@@ -210,7 +212,7 @@ func buildReferrals(rng *rand.Rand, days []*demoDay, roster []*demoUser) []*demo
 				break
 			}
 			if referrer.name == "" {
-				referrer.name = inviterNames[int(rng.Intn(len(inviterNames)))]
+				referrer.name = inviterNames[rng.Intn(len(inviterNames))]
 			}
 			picked[referrer.id] = true
 			level[invitees[i].id] = target
@@ -224,7 +226,7 @@ func buildReferrals(rng *rand.Rand, days []*demoDay, roster []*demoUser) []*demo
 	return out
 }
 
-func rollLevel(rng *rand.Rand) int32 {
+func rollLevel(rng *demoRng) int32 {
 	r := rng.Float64()
 	var acc float64
 	for i, w := range levelWeights {
@@ -233,10 +235,10 @@ func rollLevel(rng *rand.Rand) int32 {
 			return int32(i + 1)
 		}
 	}
-	return int32(len(levelWeights))
+	return utils.ConvNum[int32](len(levelWeights))
 }
 
-func pickReferrer(rng *rand.Rand, pool []*demoUser, picked map[string]bool) *demoUser {
+func pickReferrer(rng *demoRng, pool []*demoUser, picked map[string]bool) *demoUser {
 	// 用平方偏置抽取：少数人贡献多数邀请，于是「去重邀请人数」远小于
 	// 「邀请关系数」（真实裂变的长尾），同时 80% 的邀请落在还没邀请过人的候选上。
 	if len(pool) == 0 {
@@ -282,7 +284,7 @@ func (s *DemoSeed) seedReferrals(ctx context.Context, client *ent.Client, tenant
 	return nil
 }
 
-func (s *DemoSeed) seedEvents(ctx context.Context, client *ent.Client, tenant string, days []*demoDay, roster []*demoUser, invited map[string]bool, rng *rand.Rand) error {
+func (s *DemoSeed) seedEvents(ctx context.Context, client *ent.Client, tenant string, days []*demoDay, roster []*demoUser, invited map[string]bool, rng *demoRng) error {
 	byDay := make(map[int][]*demoUser, eventDays)
 	for _, u := range roster {
 		byDay[u.dayAgo] = append(byDay[u.dayAgo], u)
@@ -346,7 +348,7 @@ func (s *DemoSeed) flush(ctx context.Context, client *ent.Client, batch []*ent.E
 	return nil
 }
 
-func sampleLogins(client *ent.Client, tenant string, pool []*demoUser, invited map[string]bool, dayAgo int, rng *rand.Rand) []*ent.EventLogCreate {
+func sampleLogins(client *ent.Client, tenant string, pool []*demoUser, invited map[string]bool, dayAgo int, rng *demoRng) []*ent.EventLogCreate {
 	// 抽样当天的活跃用户，当天每人只产生一条登录事件。自然流量被抽中后
 	// 有 organicSkip 的概率被丢弃，被邀用户因此获得更高的回访率（质量部件的留存差值）。
 	target := int(math.Round(180 / math.Pow(dailyDecay, float64(dayAgo))))
@@ -366,7 +368,7 @@ func sampleLogins(client *ent.Client, tenant string, pool []*demoUser, invited m
 	return out
 }
 
-func sampleEvents(client *ent.Client, tenant string, pool []*demoUser, invited map[string]bool, dayAgo int, n int64, eventName string, rng *rand.Rand) []*ent.EventLogCreate {
+func sampleEvents(client *ent.Client, tenant string, pool []*demoUser, invited map[string]bool, dayAgo int, n int64, eventName string, rng *demoRng) []*ent.EventLogCreate {
 	// 抽样 n 条同名事件；同样按 organicSkip 偏向被邀用户。
 	out := make([]*ent.EventLogCreate, 0, n)
 	for i := int64(0); i < n; i++ {
@@ -392,7 +394,7 @@ func eventCreate(client *ent.Client, tenant, userID, eventName string, at time.T
 	return ec
 }
 
-func timeAt(dayAgo int, rng *rand.Rand) time.Time {
+func timeAt(dayAgo int, rng *demoRng) time.Time {
 	// 把 dayAgo 换算成当天的随机时刻；「今天」只取到当前小时，避免写未来时间。
 	now := time.Now()
 	day := startOfDay(now).AddDate(0, 0, -dayAgo)
@@ -405,4 +407,25 @@ func timeAt(dayAgo int, rng *rand.Rand) time.Time {
 
 func startOfDay(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+}
+
+type demoRng struct {
+	state uint64
+}
+
+func (r *demoRng) next() uint64 {
+	// splitmix64：确定性种子进、确定性序列出，够 demo 数据的均匀性即可。
+	r.state += 0x9e3779b97f4a7c15
+	z := r.state
+	z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9
+	z = (z ^ (z >> 27)) * 0x94d049bb133111eb
+	return z ^ (z >> 31)
+}
+
+func (r *demoRng) Float64() float64 {
+	return float64(r.next()>>11) / (1 << 53)
+}
+
+func (r *demoRng) Intn(n int) int {
+	return utils.ConvNum[int](r.next() % utils.ConvNum[uint64](n))
 }
