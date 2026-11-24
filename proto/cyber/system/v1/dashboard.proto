@@ -1,0 +1,177 @@
+syntax = "proto3";
+
+package cyber.system.v1;
+
+import "buf/validate/validate.proto";
+import "ext/v1/access.proto";
+import "ext/v1/desc.proto";
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/wrappers.proto";
+
+option go_package = "cyber-ecosystem/gen/go/cyber/system/v1";
+
+// 运营总览。聚合口径全部落在本模块，前端只做渲染：指标卡 / 趋势 / C 端行为漏斗 /
+// 转发裂变 / Top 邀请人 / 被邀 vs 自然同期质量 / 最近动态。
+service DashboardService {
+  option (cyber.ext.v1.service_comment) = "运营总览";
+  rpc GetOverview(GetOverviewRequest) returns (GetOverviewResponse) {
+    option (cyber.ext.v1.method) = {
+      comment: "查询运营总览"
+      action: ACTION_READ
+    };
+    option (cyber.ext.v1.access) = ACCESS_ADMIN;
+    option (google.api.http) = {get: "/api/v1/system/dashboard/overview"};
+  }
+  rpc GetTrend(GetTrendRequest) returns (GetTrendResponse) {
+    option (cyber.ext.v1.method) = {
+      comment: "查询趋势"
+      action: ACTION_READ
+    };
+    option (cyber.ext.v1.access) = ACCESS_ADMIN;
+    option (google.api.http) = {get: "/api/v1/system/dashboard/trend"};
+  }
+}
+
+// 统计时间窗：驱动指标卡、漏斗、裂变与最近动态。趋势不受其影响。
+enum Window {
+  WINDOW_UNSPECIFIED = 0;
+  WINDOW_DAY = 1;
+  WINDOW_7D = 2;
+  WINDOW_30D = 3;
+}
+
+// 趋势聚合粒度：仅驱动趋势图。
+enum Granularity {
+  GRANULARITY_UNSPECIFIED = 0;
+  GRANULARITY_WEEK = 1;
+  GRANULARITY_MONTH = 2;
+  GRANULARITY_YEAR = 3;
+}
+
+enum MetricKey {
+  METRIC_KEY_UNSPECIFIED = 0;
+  METRIC_KEY_REGISTER = 1; // 新增注册
+  METRIC_KEY_TEST = 2; // 完成测评
+  METRIC_KEY_ACTIVE = 3; // 活跃
+  METRIC_KEY_PAY = 4; // 新增付费·解锁
+}
+
+// 指标卡副标签的形态；前端按 kind 选 i18n 模板，数值与备注由本服务给。
+enum SubMetricKind {
+  SUB_METRIC_KIND_UNSPECIFIED = 0;
+  SUB_METRIC_KIND_DELTA_PREV = 1; // 与上一等长窗相比的增减（%，可负）
+  SUB_METRIC_KIND_AVG_PER_USER = 2; // 人均次数
+  SUB_METRIC_KIND_PEAK = 3; // 窗口内单日最高（note = 窗口天数，如 "7"）
+  SUB_METRIC_KIND_MANUAL = 4; // 其中手动开通数
+}
+
+// 指标卡下钻目标；目标页在本仓是否存在由前端决定可点与否。
+enum CardDrill {
+  CARD_DRILL_UNSPECIFIED = 0;
+  CARD_DRILL_USER_LIST = 1;
+  CARD_DRILL_TEST_RECORD = 2;
+  CARD_DRILL_ORDER = 3;
+}
+
+enum FunnelStageKey {
+  FUNNEL_STAGE_KEY_UNSPECIFIED = 0;
+  FUNNEL_STAGE_KEY_COMPLETE_TEST = 1; // 完成测评
+  FUNNEL_STAGE_KEY_REPORT_VIEW = 2; // 打开能力报告
+  FUNNEL_STAGE_KEY_REPORT_CENTER_VIEW = 3; // 查看报告中心
+  FUNNEL_STAGE_KEY_SHARE = 4; // 发起分享
+  FUNNEL_STAGE_KEY_MEMBER_ACTIVATE = 5; // 注册会员/解锁
+}
+
+enum QualityKey {
+  QUALITY_KEY_UNSPECIFIED = 0;
+  QUALITY_KEY_TEST_RATE = 1; // 完成测评率
+  QUALITY_KEY_PAY_RATE = 2; // 付费率
+  QUALITY_KEY_RETENTION_7D = 3; // 7 日留存
+}
+
+// getOverview
+message GetOverviewRequest {
+  optional Window window = 1 [(buf.validate.field).enum.defined_only = true];
+}
+
+message GetOverviewResponse {
+  repeated MetricCard metric_cards = 1;
+  Funnel funnel = 2;
+  Viral viral = 3;
+  repeated Inviter top_inviters = 4;
+  repeated QualityRow quality = 5;
+  repeated Activity recent_activity = 6;
+}
+
+message MetricCard {
+  MetricKey key = 1;
+  int64 value = 2;
+  SubMetricKind sub_kind = 3;
+  google.protobuf.DoubleValue sub_value = 4;
+  google.protobuf.StringValue sub_note = 5;
+  CardDrill drill = 6;
+}
+
+// 逐事件漏斗；首阶段恒为「完成测评」，故 step_conversion 为空。
+message Funnel {
+  int64 entered_tests = 1; // 本窗进入测评次数（口径注）
+  repeated FunnelStage stages = 2;
+}
+
+message FunnelStage {
+  FunnelStageKey key = 1;
+  int64 count = 2;
+  google.protobuf.DoubleValue step_conversion = 3; // 本阶段 / 上一阶段（%）
+  double of_first = 4; // 本阶段 / 首阶段（%）
+}
+
+message Viral {
+  int64 new_referrals = 1; // 新增邀请关系（user_referral 窗口内新增）
+  int64 inviters = 2; // 邀请人去重（按 referrer_id）
+  double per_inviter = 3; // 人均邀请数
+  double conversion_rate = 4; // 邀请转化率（%）：被邀用户中完成过测评
+  int64 active_users = 5; // 活跃用户（K 的分母）
+  double k_factor = 6; // 裂变系数 K = 新增被邀 / 活跃
+  repeated FissionLevel levels = 7; // 由 referrer_id 链上溯派生
+}
+
+message FissionLevel {
+  int32 level = 1; // 1 / 2 / 3 / 4，其中 4 表示「4 级+」
+  int64 count = 2;
+  double share = 3; // 占全部有层级用户（%）
+}
+
+message Inviter {
+  google.protobuf.StringValue user_id = 1;
+  string name = 2;
+  int64 invites = 3;
+  double completion_rate = 4; // 被邀人完成测评率（%）
+}
+
+message QualityRow {
+  QualityKey key = 1;
+  double invited = 2; // 被邀请用户（%）
+  double organic = 3; // 自然流量（%）
+  double delta_pp = 4; // invited - organic（百分点）
+}
+
+// 最近动态。type 取自 event_log.event_name 词表（register/login/enter_test/
+// complete_test/report_view/report_center_view/share/pay_success/unlock_success/
+// member_activate），前端翻译；content 是 props.text 原文，不翻译。
+message Activity {
+  google.protobuf.Timestamp occurred_at = 1;
+  string type = 2;
+  string content = 3;
+}
+
+// getTrend
+message GetTrendRequest {
+  optional Granularity granularity = 1 [(buf.validate.field).enum.defined_only = true];
+}
+
+message GetTrendResponse {
+  repeated string labels = 1;
+  repeated int64 registrations = 2;
+  repeated int64 completed_tests = 3;
+}

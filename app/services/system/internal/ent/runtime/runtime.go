@@ -7,13 +7,16 @@ import (
 	"cyber-ecosystem/app/services/system/internal/ent/auditlog"
 	"cyber-ecosystem/app/services/system/internal/ent/authzpolicy"
 	"cyber-ecosystem/app/services/system/internal/ent/dept"
+	"cyber-ecosystem/app/services/system/internal/ent/eventlog"
 	"cyber-ecosystem/app/services/system/internal/ent/file"
 	"cyber-ecosystem/app/services/system/internal/ent/permission"
 	"cyber-ecosystem/app/services/system/internal/ent/permissionpolicy"
+	"cyber-ecosystem/app/services/system/internal/ent/platformanalytics"
 	"cyber-ecosystem/app/services/system/internal/ent/principalrole"
 	"cyber-ecosystem/app/services/system/internal/ent/role"
 	"cyber-ecosystem/app/services/system/internal/ent/schema"
 	"cyber-ecosystem/app/services/system/internal/ent/user"
+	"cyber-ecosystem/app/services/system/internal/ent/userreferral"
 	"time"
 )
 
@@ -339,6 +342,65 @@ func init() {
 	dept.DefaultID = deptDescID.Default.(func() string)
 	// dept.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	dept.IDValidator = deptDescID.Validators[0].(func(string) error)
+	eventlogMixin := schema.EventLog{}.Mixin()
+	eventlogMixinFields0 := eventlogMixin[0].Fields()
+	_ = eventlogMixinFields0
+	eventlogMixinFields1 := eventlogMixin[1].Fields()
+	_ = eventlogMixinFields1
+	eventlogFields := schema.EventLog{}.Fields()
+	_ = eventlogFields
+	// eventlogDescCreatedAt is the schema descriptor for created_at field.
+	eventlogDescCreatedAt := eventlogMixinFields1[0].Descriptor()
+	// eventlog.DefaultCreatedAt holds the default value on creation for the created_at field.
+	eventlog.DefaultCreatedAt = eventlogDescCreatedAt.Default.(func() time.Time)
+	// eventlogDescUpdatedAt is the schema descriptor for updated_at field.
+	eventlogDescUpdatedAt := eventlogMixinFields1[1].Descriptor()
+	// eventlog.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	eventlog.DefaultUpdatedAt = eventlogDescUpdatedAt.Default.(func() time.Time)
+	// eventlog.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	eventlog.UpdateDefaultUpdatedAt = eventlogDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// eventlogDescEventName is the schema descriptor for event_name field.
+	eventlogDescEventName := eventlogFields[0].Descriptor()
+	// eventlog.EventNameValidator is a validator for the "event_name" field. It is called by the builders before save.
+	eventlog.EventNameValidator = func() func(string) error {
+		validators := eventlogDescEventName.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(event_name string) error {
+			for _, fn := range fns {
+				if err := fn(event_name); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// eventlogDescUserID is the schema descriptor for user_id field.
+	eventlogDescUserID := eventlogFields[1].Descriptor()
+	// eventlog.UserIDValidator is a validator for the "user_id" field. It is called by the builders before save.
+	eventlog.UserIDValidator = eventlogDescUserID.Validators[0].(func(string) error)
+	// eventlogDescAnonID is the schema descriptor for anon_id field.
+	eventlogDescAnonID := eventlogFields[2].Descriptor()
+	// eventlog.AnonIDValidator is a validator for the "anon_id" field. It is called by the builders before save.
+	eventlog.AnonIDValidator = eventlogDescAnonID.Validators[0].(func(string) error)
+	// eventlogDescChannel is the schema descriptor for channel field.
+	eventlogDescChannel := eventlogFields[4].Descriptor()
+	// eventlog.ChannelValidator is a validator for the "channel" field. It is called by the builders before save.
+	eventlog.ChannelValidator = eventlogDescChannel.Validators[0].(func(string) error)
+	// eventlogDescTenantID is the schema descriptor for tenant_id field.
+	eventlogDescTenantID := eventlogFields[7].Descriptor()
+	// eventlog.DefaultTenantID holds the default value on creation for the tenant_id field.
+	eventlog.DefaultTenantID = eventlogDescTenantID.Default.(string)
+	// eventlog.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	eventlog.TenantIDValidator = eventlogDescTenantID.Validators[0].(func(string) error)
+	// eventlogDescID is the schema descriptor for id field.
+	eventlogDescID := eventlogMixinFields0[0].Descriptor()
+	// eventlog.DefaultID holds the default value on creation for the id field.
+	eventlog.DefaultID = eventlogDescID.Default.(func() string)
+	// eventlog.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	eventlog.IDValidator = eventlogDescID.Validators[0].(func(string) error)
 	fileMixin := schema.File{}.Mixin()
 	fileMixinHooks2 := fileMixin[2].Hooks()
 	fileMixinHooks3 := fileMixin[3].Hooks()
@@ -606,6 +668,43 @@ func init() {
 	permissionpolicy.DefaultID = permissionpolicyDescID.Default.(func() string)
 	// permissionpolicy.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	permissionpolicy.IDValidator = permissionpolicyDescID.Validators[0].(func(string) error)
+	platformanalyticsMixin := schema.PlatformAnalytics{}.Mixin()
+	platformanalyticsMixinFields0 := platformanalyticsMixin[0].Fields()
+	_ = platformanalyticsMixinFields0
+	platformanalyticsMixinFields1 := platformanalyticsMixin[1].Fields()
+	_ = platformanalyticsMixinFields1
+	platformanalyticsFields := schema.PlatformAnalytics{}.Fields()
+	_ = platformanalyticsFields
+	// platformanalyticsDescCreatedAt is the schema descriptor for created_at field.
+	platformanalyticsDescCreatedAt := platformanalyticsMixinFields1[0].Descriptor()
+	// platformanalytics.DefaultCreatedAt holds the default value on creation for the created_at field.
+	platformanalytics.DefaultCreatedAt = platformanalyticsDescCreatedAt.Default.(func() time.Time)
+	// platformanalyticsDescUpdatedAt is the schema descriptor for updated_at field.
+	platformanalyticsDescUpdatedAt := platformanalyticsMixinFields1[1].Descriptor()
+	// platformanalytics.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	platformanalytics.DefaultUpdatedAt = platformanalyticsDescUpdatedAt.Default.(func() time.Time)
+	// platformanalytics.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	platformanalytics.UpdateDefaultUpdatedAt = platformanalyticsDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// platformanalyticsDescNewRegistrations is the schema descriptor for new_registrations field.
+	platformanalyticsDescNewRegistrations := platformanalyticsFields[1].Descriptor()
+	// platformanalytics.DefaultNewRegistrations holds the default value on creation for the new_registrations field.
+	platformanalytics.DefaultNewRegistrations = platformanalyticsDescNewRegistrations.Default.(int)
+	// platformanalyticsDescCompletedTests is the schema descriptor for completed_tests field.
+	platformanalyticsDescCompletedTests := platformanalyticsFields[2].Descriptor()
+	// platformanalytics.DefaultCompletedTests holds the default value on creation for the completed_tests field.
+	platformanalytics.DefaultCompletedTests = platformanalyticsDescCompletedTests.Default.(int)
+	// platformanalyticsDescTenantID is the schema descriptor for tenant_id field.
+	platformanalyticsDescTenantID := platformanalyticsFields[3].Descriptor()
+	// platformanalytics.DefaultTenantID holds the default value on creation for the tenant_id field.
+	platformanalytics.DefaultTenantID = platformanalyticsDescTenantID.Default.(string)
+	// platformanalytics.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	platformanalytics.TenantIDValidator = platformanalyticsDescTenantID.Validators[0].(func(string) error)
+	// platformanalyticsDescID is the schema descriptor for id field.
+	platformanalyticsDescID := platformanalyticsMixinFields0[0].Descriptor()
+	// platformanalytics.DefaultID holds the default value on creation for the id field.
+	platformanalytics.DefaultID = platformanalyticsDescID.Default.(func() string)
+	// platformanalytics.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	platformanalytics.IDValidator = platformanalyticsDescID.Validators[0].(func(string) error)
 	principalroleMixin := schema.PrincipalRole{}.Mixin()
 	principalroleMixinHooks2 := principalroleMixin[2].Hooks()
 	principalrole.Hooks[0] = principalroleMixinHooks2[0]
@@ -847,6 +946,77 @@ func init() {
 	user.DefaultID = userDescID.Default.(func() string)
 	// user.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	user.IDValidator = userDescID.Validators[0].(func(string) error)
+	userreferralMixin := schema.UserReferral{}.Mixin()
+	userreferralMixinFields0 := userreferralMixin[0].Fields()
+	_ = userreferralMixinFields0
+	userreferralMixinFields1 := userreferralMixin[1].Fields()
+	_ = userreferralMixinFields1
+	userreferralFields := schema.UserReferral{}.Fields()
+	_ = userreferralFields
+	// userreferralDescCreatedAt is the schema descriptor for created_at field.
+	userreferralDescCreatedAt := userreferralMixinFields1[0].Descriptor()
+	// userreferral.DefaultCreatedAt holds the default value on creation for the created_at field.
+	userreferral.DefaultCreatedAt = userreferralDescCreatedAt.Default.(func() time.Time)
+	// userreferralDescUpdatedAt is the schema descriptor for updated_at field.
+	userreferralDescUpdatedAt := userreferralMixinFields1[1].Descriptor()
+	// userreferral.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	userreferral.DefaultUpdatedAt = userreferralDescUpdatedAt.Default.(func() time.Time)
+	// userreferral.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	userreferral.UpdateDefaultUpdatedAt = userreferralDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// userreferralDescReferrerID is the schema descriptor for referrer_id field.
+	userreferralDescReferrerID := userreferralFields[0].Descriptor()
+	// userreferral.ReferrerIDValidator is a validator for the "referrer_id" field. It is called by the builders before save.
+	userreferral.ReferrerIDValidator = func() func(string) error {
+		validators := userreferralDescReferrerID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(referrer_id string) error {
+			for _, fn := range fns {
+				if err := fn(referrer_id); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// userreferralDescReferrerName is the schema descriptor for referrer_name field.
+	userreferralDescReferrerName := userreferralFields[1].Descriptor()
+	// userreferral.DefaultReferrerName holds the default value on creation for the referrer_name field.
+	userreferral.DefaultReferrerName = userreferralDescReferrerName.Default.(string)
+	// userreferral.ReferrerNameValidator is a validator for the "referrer_name" field. It is called by the builders before save.
+	userreferral.ReferrerNameValidator = userreferralDescReferrerName.Validators[0].(func(string) error)
+	// userreferralDescInviteeID is the schema descriptor for invitee_id field.
+	userreferralDescInviteeID := userreferralFields[2].Descriptor()
+	// userreferral.InviteeIDValidator is a validator for the "invitee_id" field. It is called by the builders before save.
+	userreferral.InviteeIDValidator = func() func(string) error {
+		validators := userreferralDescInviteeID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(invitee_id string) error {
+			for _, fn := range fns {
+				if err := fn(invitee_id); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// userreferralDescTenantID is the schema descriptor for tenant_id field.
+	userreferralDescTenantID := userreferralFields[3].Descriptor()
+	// userreferral.DefaultTenantID holds the default value on creation for the tenant_id field.
+	userreferral.DefaultTenantID = userreferralDescTenantID.Default.(string)
+	// userreferral.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	userreferral.TenantIDValidator = userreferralDescTenantID.Validators[0].(func(string) error)
+	// userreferralDescID is the schema descriptor for id field.
+	userreferralDescID := userreferralMixinFields0[0].Descriptor()
+	// userreferral.DefaultID holds the default value on creation for the id field.
+	userreferral.DefaultID = userreferralDescID.Default.(func() string)
+	// userreferral.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	userreferral.IDValidator = userreferralDescID.Validators[0].(func(string) error)
 }
 
 const (

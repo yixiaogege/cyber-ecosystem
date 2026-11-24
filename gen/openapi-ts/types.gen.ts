@@ -25,7 +25,6 @@ export type CyberAgentV1AgentConfigView = {
 };
 
 /**
- * chat
  * Constraints are enforced by explicit checks in the service handler: the
  * unary protovalidate middleware never sees streaming requests, so annotations
  * here would be dead rules.
@@ -202,6 +201,17 @@ export type CyberSharedCommonV1PageResponse = {
 
 export type CyberSystemV1AbortUploadResponse = {
     [key: string]: unknown;
+};
+
+/**
+ * 最近动态。type 取自 event_log.event_name 词表（register/login/enter_test/
+ * complete_test/report_view/report_center_view/share/pay_success/unlock_success/
+ * member_activate），前端翻译；content 是 props.text 原文，不翻译。
+ */
+export type CyberSystemV1Activity = {
+    occurredAt?: string;
+    type?: string;
+    content?: string;
 };
 
 export type CyberSystemV1AuditExport = {
@@ -523,6 +533,27 @@ export type CyberSystemV1FileUrl = {
     expiresAt?: string;
 };
 
+export type CyberSystemV1FissionLevel = {
+    level?: number;
+    count?: string;
+    share?: number;
+};
+
+/**
+ * 逐事件漏斗；首阶段恒为「完成测评」，故 step_conversion 为空。
+ */
+export type CyberSystemV1Funnel = {
+    enteredTests?: string;
+    stages?: Array<CyberSystemV1FunnelStage>;
+};
+
+export type CyberSystemV1FunnelStage = {
+    key?: 'FUNNEL_STAGE_KEY_UNSPECIFIED' | 'FUNNEL_STAGE_KEY_COMPLETE_TEST' | 'FUNNEL_STAGE_KEY_REPORT_VIEW' | 'FUNNEL_STAGE_KEY_REPORT_CENTER_VIEW' | 'FUNNEL_STAGE_KEY_SHARE' | 'FUNNEL_STAGE_KEY_MEMBER_ACTIVATE';
+    count?: string;
+    stepConversion?: number;
+    ofFirst?: number;
+};
+
 export type CyberSystemV1GetCurrentUserResponse = {
     user?: CyberSystemV1User;
     permissions?: Array<string>;
@@ -549,6 +580,15 @@ export type CyberSystemV1GetFileUrlsResponse = {
     };
 };
 
+export type CyberSystemV1GetOverviewResponse = {
+    metricCards?: Array<CyberSystemV1MetricCard>;
+    funnel?: CyberSystemV1Funnel;
+    viral?: CyberSystemV1Viral;
+    topInviters?: Array<CyberSystemV1Inviter>;
+    quality?: Array<CyberSystemV1QualityRow>;
+    recentActivity?: Array<CyberSystemV1Activity>;
+};
+
 export type CyberSystemV1GetPolicyResponse = {
     policy?: CyberSystemV1Policy;
 };
@@ -558,8 +598,21 @@ export type CyberSystemV1GetRoleResponse = {
     grants?: Array<CyberSystemV1RoleGrant>;
 };
 
+export type CyberSystemV1GetTrendResponse = {
+    labels?: Array<string>;
+    registrations?: Array<string>;
+    completedTests?: Array<string>;
+};
+
 export type CyberSystemV1GetUserResponse = {
     user?: CyberSystemV1User;
+};
+
+export type CyberSystemV1Inviter = {
+    userId?: string;
+    name?: string;
+    invites?: string;
+    completionRate?: number;
 };
 
 export type CyberSystemV1ListAuditExportsResponse = {
@@ -705,6 +758,15 @@ export type CyberSystemV1Method = {
     datascope?: boolean;
 };
 
+export type CyberSystemV1MetricCard = {
+    key?: 'METRIC_KEY_UNSPECIFIED' | 'METRIC_KEY_REGISTER' | 'METRIC_KEY_TEST' | 'METRIC_KEY_ACTIVE' | 'METRIC_KEY_PAY';
+    value?: string;
+    subKind?: 'SUB_METRIC_KIND_UNSPECIFIED' | 'SUB_METRIC_KIND_DELTA_PREV' | 'SUB_METRIC_KIND_AVG_PER_USER' | 'SUB_METRIC_KIND_PEAK' | 'SUB_METRIC_KIND_MANUAL';
+    subValue?: number;
+    subNote?: string;
+    drill?: 'CARD_DRILL_UNSPECIFIED' | 'CARD_DRILL_USER_LIST' | 'CARD_DRILL_TEST_RECORD' | 'CARD_DRILL_ORDER';
+};
+
 /**
  * Bidirectional pipe response.
  */
@@ -758,6 +820,13 @@ export type CyberSystemV1PreviewGrantsRequest = {
 
 export type CyberSystemV1PreviewGrantsResponse = {
     operations?: Array<string>;
+};
+
+export type CyberSystemV1QualityRow = {
+    key?: 'QUALITY_KEY_UNSPECIFIED' | 'QUALITY_KEY_TEST_RATE' | 'QUALITY_KEY_PAY_RATE' | 'QUALITY_KEY_RETENTION_7D';
+    invited?: number;
+    organic?: number;
+    deltaPp?: number;
 };
 
 /**
@@ -1057,6 +1126,16 @@ export type CyberSystemV1VerifySessionResponse = {
     tenantId?: string;
     sessionId?: string;
     email?: string;
+};
+
+export type CyberSystemV1Viral = {
+    newReferrals?: string;
+    inviters?: string;
+    perInviter?: number;
+    conversionRate?: number;
+    activeUsers?: string;
+    kFactor?: number;
+    levels?: Array<CyberSystemV1FissionLevel>;
 };
 
 export type AgentConfigAdminServiceListAgentConfigsData = {
@@ -1501,6 +1580,42 @@ export type RoleServicePreviewGrantsResponses = {
 };
 
 export type RoleServicePreviewGrantsResponse = RoleServicePreviewGrantsResponses[keyof RoleServicePreviewGrantsResponses];
+
+export type DashboardServiceGetOverviewData = {
+    body?: never;
+    path?: never;
+    query?: {
+        window?: 'WINDOW_UNSPECIFIED' | 'WINDOW_DAY' | 'WINDOW_7D' | 'WINDOW_30D';
+    };
+    url: '/api/v1/system/dashboard/overview';
+};
+
+export type DashboardServiceGetOverviewResponses = {
+    /**
+     * OK
+     */
+    200: CyberSystemV1GetOverviewResponse;
+};
+
+export type DashboardServiceGetOverviewResponse = DashboardServiceGetOverviewResponses[keyof DashboardServiceGetOverviewResponses];
+
+export type DashboardServiceGetTrendData = {
+    body?: never;
+    path?: never;
+    query?: {
+        granularity?: 'GRANULARITY_UNSPECIFIED' | 'GRANULARITY_WEEK' | 'GRANULARITY_MONTH' | 'GRANULARITY_YEAR';
+    };
+    url: '/api/v1/system/dashboard/trend';
+};
+
+export type DashboardServiceGetTrendResponses = {
+    /**
+     * OK
+     */
+    200: CyberSystemV1GetTrendResponse;
+};
+
+export type DashboardServiceGetTrendResponse = DashboardServiceGetTrendResponses[keyof DashboardServiceGetTrendResponses];
 
 export type DeptServiceListDeptsData = {
     body?: never;

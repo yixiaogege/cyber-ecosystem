@@ -12,6 +12,7 @@ message Bootstrap {
   Observability observability = 3;
   Catalog catalog = 4;
   Authz authz = 5;
+  Seed seed = 6;
 }
 
 message Server {
@@ -146,4 +147,10 @@ message Catalog {
 message Authz {
   repeated string super_admins = 1;
   string initial_password = 2;
+}
+
+// Seed 只控制演示数据：开则平台运营分析的事件/邀请/日度汇总在首次启动时入库。
+// 生产部署保持关闭。
+message Seed {
+  bool demo = 1;
 }

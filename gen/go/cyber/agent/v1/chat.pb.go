@@ -27,7 +27,6 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// chat
 // Constraints are enforced by explicit checks in the service handler: the
 // unary protovalidate middleware never sees streaming requests, so annotations
 // here would be dead rules.

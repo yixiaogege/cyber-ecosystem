@@ -42,5 +42,6 @@
   "layout_dashboard_tabs_close_left": "Close tabs to the left",
   "layout_dashboard_tabs_close_other": "Close other tabs",
   "layout_dashboard_tabs_close_right": "Close tabs to the right",
+  "layout_dashboard_dashboard": "Dashboard",
   "layout_dashboard_workbench": "Workbench"
 }

@@ -16,6 +16,7 @@ import (
 	"cyber-ecosystem/app/services/system/internal/module/audit"
 	"cyber-ecosystem/app/services/system/internal/module/auth"
 	"cyber-ecosystem/app/services/system/internal/module/authz"
+	"cyber-ecosystem/app/services/system/internal/module/dashboard"
 	"cyber-ecosystem/app/services/system/internal/module/dept"
 	"cyber-ecosystem/app/services/system/internal/module/file"
 	"cyber-ecosystem/app/services/system/internal/module/filepresign"
@@ -32,7 +33,7 @@ import (
 )
 
 // wireApp init kratos application.
-func wireApp(*conf.Server, *conf.Data, *conf.Authz, *conf.Catalog, *slog.Logger) (*kratos.App, func(), error) {
+func wireApp(*conf.Server, *conf.Data, *conf.Authz, *conf.Catalog, *conf.Seed, *slog.Logger) (*kratos.App, func(), error) {
 	panic(wire.Build(
 		wire.Bind(new(shared.Transaction), new(*platform.Platform)),
 		wire.Bind(new(shared.HookRegistry), new(*bootstrap.Lifecycle)),
@@ -52,6 +53,7 @@ func wireApp(*conf.Server, *conf.Data, *conf.Authz, *conf.Catalog, *slog.Logger)
 		role.ProviderSet,
 		transfer.ProviderSet,
 		introspect.ProviderSet,
+		dashboard.ProviderSet,
 		newApp,
 	))
 }

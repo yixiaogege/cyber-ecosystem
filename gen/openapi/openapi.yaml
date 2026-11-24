@@ -528,6 +528,52 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/cyber.system.v1.PreviewGrantsResponse'
+    /api/v1/system/dashboard/overview:
+        get:
+            tags:
+                - DashboardService
+            operationId: DashboardService_GetOverview
+            parameters:
+                - name: window
+                  in: query
+                  schema:
+                    enum:
+                        - WINDOW_UNSPECIFIED
+                        - WINDOW_DAY
+                        - WINDOW_7D
+                        - WINDOW_30D
+                    type: string
+                    format: enum
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/cyber.system.v1.GetOverviewResponse'
+    /api/v1/system/dashboard/trend:
+        get:
+            tags:
+                - DashboardService
+            operationId: DashboardService_GetTrend
+            parameters:
+                - name: granularity
+                  in: query
+                  schema:
+                    enum:
+                        - GRANULARITY_UNSPECIFIED
+                        - GRANULARITY_WEEK
+                        - GRANULARITY_MONTH
+                        - GRANULARITY_YEAR
+                    type: string
+                    format: enum
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/cyber.system.v1.GetTrendResponse'
     /api/v1/system/depts:
         get:
             tags:
@@ -1838,8 +1884,7 @@ components:
                         The new user turn; required, 1..32768 chars. History is loaded
                          server-side from the session.
             description: |-
-                chat
-                 Constraints are enforced by explicit checks in the service handler: the
+                Constraints are enforced by explicit checks in the service handler: the
                  unary protovalidate middleware never sees streaming requests, so annotations
                  here would be dead rules.
         cyber.agent.v1.ChatResponse:
@@ -1994,6 +2039,20 @@ components:
         cyber.system.v1.AbortUploadResponse:
             type: object
             properties: {}
+        cyber.system.v1.Activity:
+            type: object
+            properties:
+                occurredAt:
+                    type: string
+                    format: date-time
+                type:
+                    type: string
+                content:
+                    type: string
+            description: |-
+                最近动态。type 取自 event_log.event_name 词表（register/login/enter_test/
+                 complete_test/report_view/report_center_view/share/pay_success/unlock_success/
+                 member_activate），前端翻译；content 是 props.text 原文，不翻译。
         cyber.system.v1.AuditExport:
             type: object
             properties:
@@ -2393,6 +2452,48 @@ components:
                 expiresAt:
                     type: string
                     format: date-time
+        cyber.system.v1.FissionLevel:
+            type: object
+            properties:
+                level:
+                    type: integer
+                    format: int32
+                count:
+                    type: string
+                share:
+                    type: number
+                    format: double
+        cyber.system.v1.Funnel:
+            type: object
+            properties:
+                enteredTests:
+                    type: string
+                stages:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/cyber.system.v1.FunnelStage'
+            description: 逐事件漏斗；首阶段恒为「完成测评」，故 step_conversion 为空。
+        cyber.system.v1.FunnelStage:
+            type: object
+            properties:
+                key:
+                    enum:
+                        - FUNNEL_STAGE_KEY_UNSPECIFIED
+                        - FUNNEL_STAGE_KEY_COMPLETE_TEST
+                        - FUNNEL_STAGE_KEY_REPORT_VIEW
+                        - FUNNEL_STAGE_KEY_REPORT_CENTER_VIEW
+                        - FUNNEL_STAGE_KEY_SHARE
+                        - FUNNEL_STAGE_KEY_MEMBER_ACTIVATE
+                    type: string
+                    format: enum
+                count:
+                    type: string
+                stepConversion:
+                    type: number
+                    format: double
+                ofFirst:
+                    type: number
+                    format: double
         cyber.system.v1.GetCurrentUserResponse:
             type: object
             properties:
@@ -2427,6 +2528,29 @@ components:
                     type: object
                     additionalProperties:
                         $ref: '#/components/schemas/cyber.system.v1.FileUrl'
+        cyber.system.v1.GetOverviewResponse:
+            type: object
+            properties:
+                metricCards:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/cyber.system.v1.MetricCard'
+                funnel:
+                    $ref: '#/components/schemas/cyber.system.v1.Funnel'
+                viral:
+                    $ref: '#/components/schemas/cyber.system.v1.Viral'
+                topInviters:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/cyber.system.v1.Inviter'
+                quality:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/cyber.system.v1.QualityRow'
+                recentActivity:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/cyber.system.v1.Activity'
         cyber.system.v1.GetPolicyResponse:
             type: object
             properties:
@@ -2441,11 +2565,38 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/cyber.system.v1.RoleGrant'
+        cyber.system.v1.GetTrendResponse:
+            type: object
+            properties:
+                labels:
+                    type: array
+                    items:
+                        type: string
+                registrations:
+                    type: array
+                    items:
+                        type: string
+                completedTests:
+                    type: array
+                    items:
+                        type: string
         cyber.system.v1.GetUserResponse:
             type: object
             properties:
                 user:
                     $ref: '#/components/schemas/cyber.system.v1.User'
+        cyber.system.v1.Inviter:
+            type: object
+            properties:
+                userId:
+                    type: string
+                name:
+                    type: string
+                invites:
+                    type: string
+                completionRate:
+                    type: number
+                    format: double
         cyber.system.v1.ListAuditExportsResponse:
             type: object
             properties:
@@ -2626,6 +2777,42 @@ components:
                     type: boolean
                     description: Row-level narrowing applies to this op (cyber.ext.v1.datascope annotation)
             description: RPC method descriptor.
+        cyber.system.v1.MetricCard:
+            type: object
+            properties:
+                key:
+                    enum:
+                        - METRIC_KEY_UNSPECIFIED
+                        - METRIC_KEY_REGISTER
+                        - METRIC_KEY_TEST
+                        - METRIC_KEY_ACTIVE
+                        - METRIC_KEY_PAY
+                    type: string
+                    format: enum
+                value:
+                    type: string
+                subKind:
+                    enum:
+                        - SUB_METRIC_KIND_UNSPECIFIED
+                        - SUB_METRIC_KIND_DELTA_PREV
+                        - SUB_METRIC_KIND_AVG_PER_USER
+                        - SUB_METRIC_KIND_PEAK
+                        - SUB_METRIC_KIND_MANUAL
+                    type: string
+                    format: enum
+                subValue:
+                    type: number
+                    format: double
+                subNote:
+                    type: string
+                drill:
+                    enum:
+                        - CARD_DRILL_UNSPECIFIED
+                        - CARD_DRILL_USER_LIST
+                        - CARD_DRILL_TEST_RECORD
+                        - CARD_DRILL_ORDER
+                    type: string
+                    format: enum
         cyber.system.v1.PipeResponse:
             type: object
             properties:
@@ -2695,6 +2882,26 @@ components:
                     type: array
                     items:
                         type: string
+        cyber.system.v1.QualityRow:
+            type: object
+            properties:
+                key:
+                    enum:
+                        - QUALITY_KEY_UNSPECIFIED
+                        - QUALITY_KEY_TEST_RATE
+                        - QUALITY_KEY_PAY_RATE
+                        - QUALITY_KEY_RETENTION_7D
+                    type: string
+                    format: enum
+                invited:
+                    type: number
+                    format: double
+                organic:
+                    type: number
+                    format: double
+                deltaPp:
+                    type: number
+                    format: double
         cyber.system.v1.RawRequest:
             type: object
             properties:
@@ -3058,12 +3265,38 @@ components:
                     type: string
                 email:
                     type: string
+        cyber.system.v1.Viral:
+            type: object
+            properties:
+                newReferrals:
+                    type: string
+                inviters:
+                    type: string
+                perInviter:
+                    type: number
+                    format: double
+                conversionRate:
+                    type: number
+                    format: double
+                activeUsers:
+                    type: string
+                kFactor:
+                    type: number
+                    format: double
+                levels:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/cyber.system.v1.FissionLevel'
 tags:
     - name: AgentConfigAdminService
     - name: AgentConfigService
     - name: AuditService
     - name: AuthService
     - name: ChatService
+    - name: DashboardService
+      description: |-
+        运营总览。聚合口径全部落在本模块，前端只做渲染：指标卡 / 趋势 / C 端行为漏斗 /
+         转发裂变 / Top 邀请人 / 被邀 vs 自然同期质量 / 最近动态。
     - name: DeptService
     - name: FilePresignService
       description: |-

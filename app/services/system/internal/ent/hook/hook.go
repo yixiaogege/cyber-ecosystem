@@ -56,6 +56,18 @@ func (f DeptFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error)
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.DeptMutation", m)
 }
 
+// The EventLogFunc type is an adapter to allow the use of ordinary
+// function as EventLog mutator.
+type EventLogFunc func(context.Context, *ent.EventLogMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f EventLogFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.EventLogMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.EventLogMutation", m)
+}
+
 // The FileFunc type is an adapter to allow the use of ordinary
 // function as File mutator.
 type FileFunc func(context.Context, *ent.FileMutation) (ent.Value, error)
@@ -92,6 +104,18 @@ func (f PermissionPolicyFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.V
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PermissionPolicyMutation", m)
 }
 
+// The PlatformAnalyticsFunc type is an adapter to allow the use of ordinary
+// function as PlatformAnalytics mutator.
+type PlatformAnalyticsFunc func(context.Context, *ent.PlatformAnalyticsMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f PlatformAnalyticsFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.PlatformAnalyticsMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PlatformAnalyticsMutation", m)
+}
+
 // The PrincipalRoleFunc type is an adapter to allow the use of ordinary
 // function as PrincipalRole mutator.
 type PrincipalRoleFunc func(context.Context, *ent.PrincipalRoleMutation) (ent.Value, error)
@@ -126,6 +150,18 @@ func (f UserFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error)
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.UserMutation", m)
+}
+
+// The UserReferralFunc type is an adapter to allow the use of ordinary
+// function as UserReferral mutator.
+type UserReferralFunc func(context.Context, *ent.UserReferralMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f UserReferralFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.UserReferralMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.UserReferralMutation", m)
 }
 
 // Condition is a hook condition function.

@@ -102,6 +102,43 @@
     ]
   },
   {
+    "name": "DashboardService",
+    "full_name": "cyber.system.v1.DashboardService",
+    "package": "cyber.system.v1",
+    "source_file": "cyber/system/v1/dashboard.proto",
+    "comment": "运营总览",
+    "methods": [
+      {
+        "name": "GetOverview",
+        "full_name": "cyber.system.v1.DashboardService.GetOverview",
+        "request_name": "GetOverviewRequest",
+        "request_full_name": "cyber.system.v1.GetOverviewRequest",
+        "response_name": "GetOverviewResponse",
+        "response_full_name": "cyber.system.v1.GetOverviewResponse",
+        "http_method": "GET",
+        "http_path": "/api/v1/system/dashboard/overview",
+        "comment": "查询运营总览",
+        "builtin": false,
+        "access": "ADMIN",
+        "datascope": false
+      },
+      {
+        "name": "GetTrend",
+        "full_name": "cyber.system.v1.DashboardService.GetTrend",
+        "request_name": "GetTrendRequest",
+        "request_full_name": "cyber.system.v1.GetTrendRequest",
+        "response_name": "GetTrendResponse",
+        "response_full_name": "cyber.system.v1.GetTrendResponse",
+        "http_method": "GET",
+        "http_path": "/api/v1/system/dashboard/trend",
+        "comment": "查询趋势",
+        "builtin": false,
+        "access": "ADMIN",
+        "datascope": false
+      }
+    ]
+  },
+  {
     "name": "DeptService",
     "full_name": "cyber.system.v1.DeptService",
     "package": "cyber.system.v1",

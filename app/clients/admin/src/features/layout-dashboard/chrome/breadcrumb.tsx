@@ -46,11 +46,11 @@ export function Breadcrumb() {
   const matches = useMatches();
 
   const crumbs = useMemo<Crumb[]>(() => {
-    const trail: Crumb[] = [{ title: "layout_dashboard_workbench", path: AREA_PATH }];
+    const trail: Crumb[] = [{ title: "layout_dashboard_dashboard", path: AREA_PATH }];
     for (const mt of matches) {
       const title = mt.staticData.title;
       const path = mt.pathname.replace(/\/$/, "");
-      if (title && path.startsWith(`${AREA_PATH}/`)) {
+      if (title && title !== "layout_dashboard_dashboard" && path.startsWith(`${AREA_PATH}/`)) {
         trail.push({ params: compactParams(mt.params), title, path });
       }
     }

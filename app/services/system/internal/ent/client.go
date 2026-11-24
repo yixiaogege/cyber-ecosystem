@@ -15,12 +15,15 @@ import (
 	"cyber-ecosystem/app/services/system/internal/ent/auditlog"
 	"cyber-ecosystem/app/services/system/internal/ent/authzpolicy"
 	"cyber-ecosystem/app/services/system/internal/ent/dept"
+	"cyber-ecosystem/app/services/system/internal/ent/eventlog"
 	"cyber-ecosystem/app/services/system/internal/ent/file"
 	"cyber-ecosystem/app/services/system/internal/ent/permission"
 	"cyber-ecosystem/app/services/system/internal/ent/permissionpolicy"
+	"cyber-ecosystem/app/services/system/internal/ent/platformanalytics"
 	"cyber-ecosystem/app/services/system/internal/ent/principalrole"
 	"cyber-ecosystem/app/services/system/internal/ent/role"
 	"cyber-ecosystem/app/services/system/internal/ent/user"
+	"cyber-ecosystem/app/services/system/internal/ent/userreferral"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect"
@@ -42,18 +45,24 @@ type Client struct {
 	AuthzPolicy *AuthzPolicyClient
 	// Dept is the client for interacting with the Dept builders.
 	Dept *DeptClient
+	// EventLog is the client for interacting with the EventLog builders.
+	EventLog *EventLogClient
 	// File is the client for interacting with the File builders.
 	File *FileClient
 	// Permission is the client for interacting with the Permission builders.
 	Permission *PermissionClient
 	// PermissionPolicy is the client for interacting with the PermissionPolicy builders.
 	PermissionPolicy *PermissionPolicyClient
+	// PlatformAnalytics is the client for interacting with the PlatformAnalytics builders.
+	PlatformAnalytics *PlatformAnalyticsClient
 	// PrincipalRole is the client for interacting with the PrincipalRole builders.
 	PrincipalRole *PrincipalRoleClient
 	// Role is the client for interacting with the Role builders.
 	Role *RoleClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
+	// UserReferral is the client for interacting with the UserReferral builders.
+	UserReferral *UserReferralClient
 }
 
 // NewClient creates a new client configured with the given options.
@@ -69,12 +78,15 @@ func (c *Client) init() {
 	c.AuditLog = NewAuditLogClient(c.config)
 	c.AuthzPolicy = NewAuthzPolicyClient(c.config)
 	c.Dept = NewDeptClient(c.config)
+	c.EventLog = NewEventLogClient(c.config)
 	c.File = NewFileClient(c.config)
 	c.Permission = NewPermissionClient(c.config)
 	c.PermissionPolicy = NewPermissionPolicyClient(c.config)
+	c.PlatformAnalytics = NewPlatformAnalyticsClient(c.config)
 	c.PrincipalRole = NewPrincipalRoleClient(c.config)
 	c.Role = NewRoleClient(c.config)
 	c.User = NewUserClient(c.config)
+	c.UserReferral = NewUserReferralClient(c.config)
 }
 
 type (
@@ -165,18 +177,21 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:              ctx,
-		config:           cfg,
-		AuditExport:      NewAuditExportClient(cfg),
-		AuditLog:         NewAuditLogClient(cfg),
-		AuthzPolicy:      NewAuthzPolicyClient(cfg),
-		Dept:             NewDeptClient(cfg),
-		File:             NewFileClient(cfg),
-		Permission:       NewPermissionClient(cfg),
-		PermissionPolicy: NewPermissionPolicyClient(cfg),
-		PrincipalRole:    NewPrincipalRoleClient(cfg),
-		Role:             NewRoleClient(cfg),
-		User:             NewUserClient(cfg),
+		ctx:               ctx,
+		config:            cfg,
+		AuditExport:       NewAuditExportClient(cfg),
+		AuditLog:          NewAuditLogClient(cfg),
+		AuthzPolicy:       NewAuthzPolicyClient(cfg),
+		Dept:              NewDeptClient(cfg),
+		EventLog:          NewEventLogClient(cfg),
+		File:              NewFileClient(cfg),
+		Permission:        NewPermissionClient(cfg),
+		PermissionPolicy:  NewPermissionPolicyClient(cfg),
+		PlatformAnalytics: NewPlatformAnalyticsClient(cfg),
+		PrincipalRole:     NewPrincipalRoleClient(cfg),
+		Role:              NewRoleClient(cfg),
+		User:              NewUserClient(cfg),
+		UserReferral:      NewUserReferralClient(cfg),
 	}, nil
 }
 
@@ -194,18 +209,21 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:              ctx,
-		config:           cfg,
-		AuditExport:      NewAuditExportClient(cfg),
-		AuditLog:         NewAuditLogClient(cfg),
-		AuthzPolicy:      NewAuthzPolicyClient(cfg),
-		Dept:             NewDeptClient(cfg),
-		File:             NewFileClient(cfg),
-		Permission:       NewPermissionClient(cfg),
-		PermissionPolicy: NewPermissionPolicyClient(cfg),
-		PrincipalRole:    NewPrincipalRoleClient(cfg),
-		Role:             NewRoleClient(cfg),
-		User:             NewUserClient(cfg),
+		ctx:               ctx,
+		config:            cfg,
+		AuditExport:       NewAuditExportClient(cfg),
+		AuditLog:          NewAuditLogClient(cfg),
+		AuthzPolicy:       NewAuthzPolicyClient(cfg),
+		Dept:              NewDeptClient(cfg),
+		EventLog:          NewEventLogClient(cfg),
+		File:              NewFileClient(cfg),
+		Permission:        NewPermissionClient(cfg),
+		PermissionPolicy:  NewPermissionPolicyClient(cfg),
+		PlatformAnalytics: NewPlatformAnalyticsClient(cfg),
+		PrincipalRole:     NewPrincipalRoleClient(cfg),
+		Role:              NewRoleClient(cfg),
+		User:              NewUserClient(cfg),
+		UserReferral:      NewUserReferralClient(cfg),
 	}, nil
 }
 
@@ -235,8 +253,9 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.AuditExport, c.AuditLog, c.AuthzPolicy, c.Dept, c.File, c.Permission,
-		c.PermissionPolicy, c.PrincipalRole, c.Role, c.User,
+		c.AuditExport, c.AuditLog, c.AuthzPolicy, c.Dept, c.EventLog, c.File,
+		c.Permission, c.PermissionPolicy, c.PlatformAnalytics, c.PrincipalRole, c.Role,
+		c.User, c.UserReferral,
 	} {
 		n.Use(hooks...)
 	}
@@ -246,8 +265,9 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.AuditExport, c.AuditLog, c.AuthzPolicy, c.Dept, c.File, c.Permission,
-		c.PermissionPolicy, c.PrincipalRole, c.Role, c.User,
+		c.AuditExport, c.AuditLog, c.AuthzPolicy, c.Dept, c.EventLog, c.File,
+		c.Permission, c.PermissionPolicy, c.PlatformAnalytics, c.PrincipalRole, c.Role,
+		c.User, c.UserReferral,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -264,18 +284,24 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.AuthzPolicy.mutate(ctx, m)
 	case *DeptMutation:
 		return c.Dept.mutate(ctx, m)
+	case *EventLogMutation:
+		return c.EventLog.mutate(ctx, m)
 	case *FileMutation:
 		return c.File.mutate(ctx, m)
 	case *PermissionMutation:
 		return c.Permission.mutate(ctx, m)
 	case *PermissionPolicyMutation:
 		return c.PermissionPolicy.mutate(ctx, m)
+	case *PlatformAnalyticsMutation:
+		return c.PlatformAnalytics.mutate(ctx, m)
 	case *PrincipalRoleMutation:
 		return c.PrincipalRole.mutate(ctx, m)
 	case *RoleMutation:
 		return c.Role.mutate(ctx, m)
 	case *UserMutation:
 		return c.User.mutate(ctx, m)
+	case *UserReferralMutation:
+		return c.UserReferral.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
 	}
@@ -819,6 +845,139 @@ func (c *DeptClient) mutate(ctx context.Context, m *DeptMutation) (Value, error)
 	}
 }
 
+// EventLogClient is a client for the EventLog schema.
+type EventLogClient struct {
+	config
+}
+
+// NewEventLogClient returns a client for the EventLog from the given config.
+func NewEventLogClient(c config) *EventLogClient {
+	return &EventLogClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `eventlog.Hooks(f(g(h())))`.
+func (c *EventLogClient) Use(hooks ...Hook) {
+	c.hooks.EventLog = append(c.hooks.EventLog, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `eventlog.Intercept(f(g(h())))`.
+func (c *EventLogClient) Intercept(interceptors ...Interceptor) {
+	c.inters.EventLog = append(c.inters.EventLog, interceptors...)
+}
+
+// Create returns a builder for creating a EventLog entity.
+func (c *EventLogClient) Create() *EventLogCreate {
+	mutation := newEventLogMutation(c.config, OpCreate)
+	return &EventLogCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of EventLog entities.
+func (c *EventLogClient) CreateBulk(builders ...*EventLogCreate) *EventLogCreateBulk {
+	return &EventLogCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *EventLogClient) MapCreateBulk(slice any, setFunc func(*EventLogCreate, int)) *EventLogCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &EventLogCreateBulk{err: fmt.Errorf("calling to EventLogClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*EventLogCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &EventLogCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for EventLog.
+func (c *EventLogClient) Update() *EventLogUpdate {
+	mutation := newEventLogMutation(c.config, OpUpdate)
+	return &EventLogUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *EventLogClient) UpdateOne(_m *EventLog) *EventLogUpdateOne {
+	mutation := newEventLogMutation(c.config, OpUpdateOne, withEventLog(_m))
+	return &EventLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *EventLogClient) UpdateOneID(id string) *EventLogUpdateOne {
+	mutation := newEventLogMutation(c.config, OpUpdateOne, withEventLogID(id))
+	return &EventLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for EventLog.
+func (c *EventLogClient) Delete() *EventLogDelete {
+	mutation := newEventLogMutation(c.config, OpDelete)
+	return &EventLogDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *EventLogClient) DeleteOne(_m *EventLog) *EventLogDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *EventLogClient) DeleteOneID(id string) *EventLogDeleteOne {
+	builder := c.Delete().Where(eventlog.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &EventLogDeleteOne{builder}
+}
+
+// Query returns a query builder for EventLog.
+func (c *EventLogClient) Query() *EventLogQuery {
+	return &EventLogQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeEventLog},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a EventLog entity by its id.
+func (c *EventLogClient) Get(ctx context.Context, id string) (*EventLog, error) {
+	return c.Query().Where(eventlog.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *EventLogClient) GetX(ctx context.Context, id string) *EventLog {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *EventLogClient) Hooks() []Hook {
+	return c.hooks.EventLog
+}
+
+// Interceptors returns the client interceptors.
+func (c *EventLogClient) Interceptors() []Interceptor {
+	return c.inters.EventLog
+}
+
+func (c *EventLogClient) mutate(ctx context.Context, m *EventLogMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&EventLogCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&EventLogUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&EventLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&EventLogDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown EventLog mutation op: %q", m.Op())
+	}
+}
+
 // FileClient is a client for the File schema.
 type FileClient struct {
 	config
@@ -1221,6 +1380,139 @@ func (c *PermissionPolicyClient) mutate(ctx context.Context, m *PermissionPolicy
 		return (&PermissionPolicyDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown PermissionPolicy mutation op: %q", m.Op())
+	}
+}
+
+// PlatformAnalyticsClient is a client for the PlatformAnalytics schema.
+type PlatformAnalyticsClient struct {
+	config
+}
+
+// NewPlatformAnalyticsClient returns a client for the PlatformAnalytics from the given config.
+func NewPlatformAnalyticsClient(c config) *PlatformAnalyticsClient {
+	return &PlatformAnalyticsClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `platformanalytics.Hooks(f(g(h())))`.
+func (c *PlatformAnalyticsClient) Use(hooks ...Hook) {
+	c.hooks.PlatformAnalytics = append(c.hooks.PlatformAnalytics, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `platformanalytics.Intercept(f(g(h())))`.
+func (c *PlatformAnalyticsClient) Intercept(interceptors ...Interceptor) {
+	c.inters.PlatformAnalytics = append(c.inters.PlatformAnalytics, interceptors...)
+}
+
+// Create returns a builder for creating a PlatformAnalytics entity.
+func (c *PlatformAnalyticsClient) Create() *PlatformAnalyticsCreate {
+	mutation := newPlatformAnalyticsMutation(c.config, OpCreate)
+	return &PlatformAnalyticsCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of PlatformAnalytics entities.
+func (c *PlatformAnalyticsClient) CreateBulk(builders ...*PlatformAnalyticsCreate) *PlatformAnalyticsCreateBulk {
+	return &PlatformAnalyticsCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *PlatformAnalyticsClient) MapCreateBulk(slice any, setFunc func(*PlatformAnalyticsCreate, int)) *PlatformAnalyticsCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &PlatformAnalyticsCreateBulk{err: fmt.Errorf("calling to PlatformAnalyticsClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*PlatformAnalyticsCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &PlatformAnalyticsCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for PlatformAnalytics.
+func (c *PlatformAnalyticsClient) Update() *PlatformAnalyticsUpdate {
+	mutation := newPlatformAnalyticsMutation(c.config, OpUpdate)
+	return &PlatformAnalyticsUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *PlatformAnalyticsClient) UpdateOne(_m *PlatformAnalytics) *PlatformAnalyticsUpdateOne {
+	mutation := newPlatformAnalyticsMutation(c.config, OpUpdateOne, withPlatformAnalytics(_m))
+	return &PlatformAnalyticsUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *PlatformAnalyticsClient) UpdateOneID(id string) *PlatformAnalyticsUpdateOne {
+	mutation := newPlatformAnalyticsMutation(c.config, OpUpdateOne, withPlatformAnalyticsID(id))
+	return &PlatformAnalyticsUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for PlatformAnalytics.
+func (c *PlatformAnalyticsClient) Delete() *PlatformAnalyticsDelete {
+	mutation := newPlatformAnalyticsMutation(c.config, OpDelete)
+	return &PlatformAnalyticsDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *PlatformAnalyticsClient) DeleteOne(_m *PlatformAnalytics) *PlatformAnalyticsDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *PlatformAnalyticsClient) DeleteOneID(id string) *PlatformAnalyticsDeleteOne {
+	builder := c.Delete().Where(platformanalytics.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &PlatformAnalyticsDeleteOne{builder}
+}
+
+// Query returns a query builder for PlatformAnalytics.
+func (c *PlatformAnalyticsClient) Query() *PlatformAnalyticsQuery {
+	return &PlatformAnalyticsQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypePlatformAnalytics},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a PlatformAnalytics entity by its id.
+func (c *PlatformAnalyticsClient) Get(ctx context.Context, id string) (*PlatformAnalytics, error) {
+	return c.Query().Where(platformanalytics.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *PlatformAnalyticsClient) GetX(ctx context.Context, id string) *PlatformAnalytics {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *PlatformAnalyticsClient) Hooks() []Hook {
+	return c.hooks.PlatformAnalytics
+}
+
+// Interceptors returns the client interceptors.
+func (c *PlatformAnalyticsClient) Interceptors() []Interceptor {
+	return c.inters.PlatformAnalytics
+}
+
+func (c *PlatformAnalyticsClient) mutate(ctx context.Context, m *PlatformAnalyticsMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&PlatformAnalyticsCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&PlatformAnalyticsUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&PlatformAnalyticsUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&PlatformAnalyticsDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown PlatformAnalytics mutation op: %q", m.Op())
 	}
 }
 
@@ -1629,15 +1921,150 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 	}
 }
 
+// UserReferralClient is a client for the UserReferral schema.
+type UserReferralClient struct {
+	config
+}
+
+// NewUserReferralClient returns a client for the UserReferral from the given config.
+func NewUserReferralClient(c config) *UserReferralClient {
+	return &UserReferralClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `userreferral.Hooks(f(g(h())))`.
+func (c *UserReferralClient) Use(hooks ...Hook) {
+	c.hooks.UserReferral = append(c.hooks.UserReferral, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `userreferral.Intercept(f(g(h())))`.
+func (c *UserReferralClient) Intercept(interceptors ...Interceptor) {
+	c.inters.UserReferral = append(c.inters.UserReferral, interceptors...)
+}
+
+// Create returns a builder for creating a UserReferral entity.
+func (c *UserReferralClient) Create() *UserReferralCreate {
+	mutation := newUserReferralMutation(c.config, OpCreate)
+	return &UserReferralCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of UserReferral entities.
+func (c *UserReferralClient) CreateBulk(builders ...*UserReferralCreate) *UserReferralCreateBulk {
+	return &UserReferralCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *UserReferralClient) MapCreateBulk(slice any, setFunc func(*UserReferralCreate, int)) *UserReferralCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &UserReferralCreateBulk{err: fmt.Errorf("calling to UserReferralClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*UserReferralCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &UserReferralCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for UserReferral.
+func (c *UserReferralClient) Update() *UserReferralUpdate {
+	mutation := newUserReferralMutation(c.config, OpUpdate)
+	return &UserReferralUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *UserReferralClient) UpdateOne(_m *UserReferral) *UserReferralUpdateOne {
+	mutation := newUserReferralMutation(c.config, OpUpdateOne, withUserReferral(_m))
+	return &UserReferralUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *UserReferralClient) UpdateOneID(id string) *UserReferralUpdateOne {
+	mutation := newUserReferralMutation(c.config, OpUpdateOne, withUserReferralID(id))
+	return &UserReferralUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for UserReferral.
+func (c *UserReferralClient) Delete() *UserReferralDelete {
+	mutation := newUserReferralMutation(c.config, OpDelete)
+	return &UserReferralDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *UserReferralClient) DeleteOne(_m *UserReferral) *UserReferralDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *UserReferralClient) DeleteOneID(id string) *UserReferralDeleteOne {
+	builder := c.Delete().Where(userreferral.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &UserReferralDeleteOne{builder}
+}
+
+// Query returns a query builder for UserReferral.
+func (c *UserReferralClient) Query() *UserReferralQuery {
+	return &UserReferralQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeUserReferral},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a UserReferral entity by its id.
+func (c *UserReferralClient) Get(ctx context.Context, id string) (*UserReferral, error) {
+	return c.Query().Where(userreferral.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *UserReferralClient) GetX(ctx context.Context, id string) *UserReferral {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *UserReferralClient) Hooks() []Hook {
+	return c.hooks.UserReferral
+}
+
+// Interceptors returns the client interceptors.
+func (c *UserReferralClient) Interceptors() []Interceptor {
+	return c.inters.UserReferral
+}
+
+func (c *UserReferralClient) mutate(ctx context.Context, m *UserReferralMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&UserReferralCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&UserReferralUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&UserReferralUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&UserReferralDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown UserReferral mutation op: %q", m.Op())
+	}
+}
+
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		AuditExport, AuditLog, AuthzPolicy, Dept, File, Permission, PermissionPolicy,
-		PrincipalRole, Role, User []ent.Hook
+		AuditExport, AuditLog, AuthzPolicy, Dept, EventLog, File, Permission,
+		PermissionPolicy, PlatformAnalytics, PrincipalRole, Role, User,
+		UserReferral []ent.Hook
 	}
 	inters struct {
-		AuditExport, AuditLog, AuthzPolicy, Dept, File, Permission, PermissionPolicy,
-		PrincipalRole, Role, User []ent.Interceptor
+		AuditExport, AuditLog, AuthzPolicy, Dept, EventLog, File, Permission,
+		PermissionPolicy, PlatformAnalytics, PrincipalRole, Role, User,
+		UserReferral []ent.Interceptor
 	}
 )
 

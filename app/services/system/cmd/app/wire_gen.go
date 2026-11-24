@@ -12,6 +12,7 @@ import (
 	"cyber-ecosystem/app/services/system/internal/module/audit"
 	"cyber-ecosystem/app/services/system/internal/module/auth"
 	"cyber-ecosystem/app/services/system/internal/module/authz"
+	"cyber-ecosystem/app/services/system/internal/module/dashboard"
 	"cyber-ecosystem/app/services/system/internal/module/dept"
 	"cyber-ecosystem/app/services/system/internal/module/file"
 	"cyber-ecosystem/app/services/system/internal/module/filepresign"
@@ -31,7 +32,7 @@ import (
 // Injectors from wire.go:
 
 // wireApp init kratos application.
-func wireApp(confServer *conf.Server, data *conf.Data, confAuthz *conf.Authz, catalog *conf.Catalog, logger *slog.Logger) (*kratos.App, func(), error) {
+func wireApp(confServer *conf.Server, data *conf.Data, confAuthz *conf.Authz, catalog *conf.Catalog, seed *conf.Seed, logger *slog.Logger) (*kratos.App, func(), error) {
 	cache, cleanup, err := platform.NewCache(data, logger)
 	if err != nil {
 		return nil, nil, err
@@ -132,11 +133,14 @@ func wireApp(confServer *conf.Server, data *conf.Data, confAuthz *conf.Authz, ca
 	filePresignService := filepresign.NewFilePresignService(logger, filePresignUC)
 	authzUC := authz.NewAuthzUC(logger, platformPlatform, authzRP, lifecycle)
 	introspectService := introspect.NewIntrospectService(logger, authzUC)
-	v := server.NewRegistrarList(deptService, resourceService, userService, transferService, authService, roleService, policyService, auditService, fileService, fileProxyService, filePresignService, introspectService)
+	dashboardRP := dashboard.NewDashboardRP(logger, platformPlatform)
+	dashboardUC := dashboard.NewDashboardUC(logger, platformPlatform, dashboardRP)
+	dashboardService := dashboard.NewDashboardService(logger, dashboardUC)
+	v := server.NewRegistrarList(deptService, resourceService, userService, transferService, authService, roleService, policyService, auditService, fileService, fileProxyService, filePresignService, introspectService, dashboardService)
 	grpcServer := server.NewGRPCServer(confServer, logger, v, authUC, authzUC, auditUC)
 	httpServer := server.NewHTTPServer(confServer, logger, v, authUC, authzUC, auditUC)
 	connectServer := server.NewConnectServer(confServer, logger, v, authUC, authzUC, auditUC)
-	seed, err := bootstrap.NewSeed(confAuthz, platformPlatform, logger)
+	bootstrapSeed, err := bootstrap.NewSeed(confAuthz, platformPlatform, logger)
 	if err != nil {
 		cleanup5()
 		cleanup4()
@@ -145,7 +149,16 @@ func wireApp(confServer *conf.Server, data *conf.Data, confAuthz *conf.Authz, ca
 		cleanup()
 		return nil, nil, err
 	}
-	app := newApp(logger, grpcServer, httpServer, connectServer, seed, lifecycle)
+	demoSeed, err := bootstrap.NewDemoSeed(seed, platformPlatform, logger)
+	if err != nil {
+		cleanup5()
+		cleanup4()
+		cleanup3()
+		cleanup2()
+		cleanup()
+		return nil, nil, err
+	}
+	app := newApp(logger, grpcServer, httpServer, connectServer, bootstrapSeed, demoSeed, lifecycle)
 	return app, func() {
 		cleanup5()
 		cleanup4()

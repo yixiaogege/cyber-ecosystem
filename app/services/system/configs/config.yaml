@@ -86,3 +86,6 @@ authz:
     - admin1@cyber.local            # 邮箱 (种子超管)
     - admin2@cyber.local
   initial_password: "Admin@123456" # 口令
+
+seed:
+  demo: true # 写入平台运营分析的演示数据（仅裸机 dev；容器部署关闭）

@@ -77,3 +77,6 @@ authz:
   super_admins:
     - admin@cyber.pre
   initial_password: "admin123456"
+
+seed:
+  demo: ${SEED_DEMO:false} # demo data is bare-metal dev only

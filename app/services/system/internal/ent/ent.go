@@ -8,12 +8,15 @@ import (
 	"cyber-ecosystem/app/services/system/internal/ent/auditlog"
 	"cyber-ecosystem/app/services/system/internal/ent/authzpolicy"
 	"cyber-ecosystem/app/services/system/internal/ent/dept"
+	"cyber-ecosystem/app/services/system/internal/ent/eventlog"
 	"cyber-ecosystem/app/services/system/internal/ent/file"
 	"cyber-ecosystem/app/services/system/internal/ent/permission"
 	"cyber-ecosystem/app/services/system/internal/ent/permissionpolicy"
+	"cyber-ecosystem/app/services/system/internal/ent/platformanalytics"
 	"cyber-ecosystem/app/services/system/internal/ent/principalrole"
 	"cyber-ecosystem/app/services/system/internal/ent/role"
 	"cyber-ecosystem/app/services/system/internal/ent/user"
+	"cyber-ecosystem/app/services/system/internal/ent/userreferral"
 	"errors"
 	"fmt"
 	"reflect"
@@ -82,16 +85,19 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			auditexport.Table:      auditexport.ValidColumn,
-			auditlog.Table:         auditlog.ValidColumn,
-			authzpolicy.Table:      authzpolicy.ValidColumn,
-			dept.Table:             dept.ValidColumn,
-			file.Table:             file.ValidColumn,
-			permission.Table:       permission.ValidColumn,
-			permissionpolicy.Table: permissionpolicy.ValidColumn,
-			principalrole.Table:    principalrole.ValidColumn,
-			role.Table:             role.ValidColumn,
-			user.Table:             user.ValidColumn,
+			auditexport.Table:       auditexport.ValidColumn,
+			auditlog.Table:          auditlog.ValidColumn,
+			authzpolicy.Table:       authzpolicy.ValidColumn,
+			dept.Table:              dept.ValidColumn,
+			eventlog.Table:          eventlog.ValidColumn,
+			file.Table:              file.ValidColumn,
+			permission.Table:        permission.ValidColumn,
+			permissionpolicy.Table:  permissionpolicy.ValidColumn,
+			platformanalytics.Table: platformanalytics.ValidColumn,
+			principalrole.Table:     principalrole.ValidColumn,
+			role.Table:              role.ValidColumn,
+			user.Table:              user.ValidColumn,
+			userreferral.Table:      userreferral.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

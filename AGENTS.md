@@ -20,7 +20,7 @@ Monorepo for the Cyber Ecosystem platform — a **generic development skeleton**
 |---|---|
 | `proto/` | Protobuf contracts — the source of truth |
 | `gen/` | Generated code (Go, connect-ts, OpenAPI) — derived, never hand-edited |
-| `app/services/<name>/` | Kratos Go services; `system` = the mandatory base service (IAM) |
+| `app/services/<name>/` | Kratos Go services; `system` = the mandatory base service (IAM + platform analytics) |
 | `app/clients/<name>/` | TanStack Start web clients (`admin`) |
 | `shared-go/` | Cross-service Go capabilities (transport, security, capability facades) |
 | `shared-ts/` | Cross-client TS capabilities (error, antd, theme, store, cookie, router-progress, storybook) |
@@ -110,7 +110,7 @@ Adding a new tech stack: create `docs/conventions/<area>/CONVENTIONS.md` **with 
 
 One shared base, many business applications:
 
-- **`system` is the mandatory base service** every application deploys: authentication, user identity, org (dept), roles, authz engine, resource catalog. Each application adds services under `app/services/<name>` with contracts under `proto/cyber/<name>/v1`, owning its aggregates end-to-end (schema, migrations, biz, RPC).
+- **`system` is the mandatory base service** every application deploys: authentication, user identity, org (dept), roles, authz engine, resource catalog, plus the **platform-level operational analytics** every application inherits for free — the cross-domain event ledger (`event_log`), invite graph (`user_referral`) and daily rollups (`platform_analytics`) behind the ops dashboard. Each application adds services under `app/services/<name>` with contracts under `proto/cyber/<name>/v1`, owning its aggregates end-to-end (schema, migrations, biz, RPC).
 - Cross-service reads at runtime go through the owning service's RPCs — from clients, or behind a `<Remote>RP` ACL adapter in the consuming service. Business services `MUST NOT` grow identity/auth concerns; those live in `system` and are shared by all apps.
 - **User split**: `system.User` is the authentication identity core only (credentials, org membership, role bindings). App-specific person data is the app's own domain aggregate keyed by `user_id` (plain id field), named by its domain concept (`Delegate`, `Operator`) — never `UserExt`-style field bags; own proto, own schema, logical reference only. A field enters `system.User` only when ≥2 applications genuinely need it. Reads hydrate identity via `system` RPCs — a missing profile degrades rendering, never breaks the row; each aggregate keeps a single write entrance. `system` cascades only what it owns; business profiles tolerate orphaning; cross-service invalidation events appear only on a second real consumer.
 - **Pluggable system surface**, cheapest tier first: permission gating by default (hide-by-default — an ungranted operation never surfaces) → config-level module registry when the API itself must be absent → code fork only when isolation physically forces it, and then as a delivery action, not a development structure.

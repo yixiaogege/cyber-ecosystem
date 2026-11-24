@@ -37,7 +37,7 @@ func init() {
 	jsoncodec.Register()
 }
 
-func newApp(logger *slog.Logger, gs *grpc.Server, hs *http.Server, cs *connect.Server, seeder *bootstrap.Seed, lc *bootstrap.Lifecycle) *kratos.App {
+func newApp(logger *slog.Logger, gs *grpc.Server, hs *http.Server, cs *connect.Server, seeder *bootstrap.Seed, demoSeeder *bootstrap.DemoSeed, lc *bootstrap.Lifecycle) *kratos.App {
 	return kratos.New(append([]kratos.Option{
 		kratos.ID(id),
 		kratos.Name(Name),
@@ -47,6 +47,7 @@ func newApp(logger *slog.Logger, gs *grpc.Server, hs *http.Server, cs *connect.S
 		kratos.Server(gs, hs, cs),
 		kratos.BeforeStart(lc.Start),
 		kratos.BeforeStart(seeder.Run),
+		kratos.BeforeStart(demoSeeder.Run),
 		kratos.AfterStop(lc.Stop),
 	}, health.Mount(hs)...)...)
 }
@@ -119,7 +120,7 @@ func main() {
 	}
 	defer shutdownObs()
 
-	app, cleanup, err := wireApp(bc.Server, bc.Data, bc.Authz, bc.Catalog, logger)
+	app, cleanup, err := wireApp(bc.Server, bc.Data, bc.Authz, bc.Catalog, bc.Seed, logger)
 	if err != nil {
 		panic(err)
 	}

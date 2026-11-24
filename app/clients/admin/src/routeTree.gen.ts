@@ -16,11 +16,15 @@ import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
 import { Route as DashboardAgentsRouteRouteImport } from './routes/dashboard/agents/route'
 import { Route as DashboardFilesRouteRouteImport } from './routes/dashboard/files/route'
+import { Route as DashboardHomeRouteRouteImport } from './routes/dashboard/home/route'
 import { Route as DashboardProfileRouteRouteImport } from './routes/dashboard/profile/route'
 import { Route as DashboardSystemRouteRouteImport } from './routes/dashboard/system/route'
 import { Route as LoginIndexRouteImport } from './routes/login/index'
 import { Route as DashboardAgentsConnectionsRouteImport } from './routes/dashboard/agents/connections'
 import { Route as DashboardFilesListRouteImport } from './routes/dashboard/files/list'
+import { Route as DashboardHomeIndexRouteImport } from './routes/dashboard/home/index'
+import { Route as DashboardHomeOverviewRouteImport } from './routes/dashboard/home/overview'
+import { Route as DashboardHomeUserPortraitRouteImport } from './routes/dashboard/home/user-portrait'
 import { Route as DashboardProfileIndexRouteImport } from './routes/dashboard/profile/index'
 import { Route as DashboardProfileAgentsRouteImport } from './routes/dashboard/profile/agents'
 import { Route as DashboardProfilePasswordRouteImport } from './routes/dashboard/profile/password'
@@ -66,6 +70,11 @@ const DashboardFilesRouteRoute = DashboardFilesRouteRouteImport.update({
   path: '/files',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
+const DashboardHomeRouteRoute = DashboardHomeRouteRouteImport.update({
+  id: '/home',
+  path: '/home',
+  getParentRoute: () => DashboardRouteRoute,
+} as any)
 const DashboardProfileRouteRoute = DashboardProfileRouteRouteImport.update({
   id: '/profile',
   path: '/profile',
@@ -92,6 +101,22 @@ const DashboardFilesListRoute = DashboardFilesListRouteImport.update({
   path: '/list',
   getParentRoute: () => DashboardFilesRouteRoute,
 } as any)
+const DashboardHomeIndexRoute = DashboardHomeIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DashboardHomeRouteRoute,
+} as any)
+const DashboardHomeOverviewRoute = DashboardHomeOverviewRouteImport.update({
+  id: '/overview',
+  path: '/overview',
+  getParentRoute: () => DashboardHomeRouteRoute,
+} as any)
+const DashboardHomeUserPortraitRoute =
+  DashboardHomeUserPortraitRouteImport.update({
+    id: '/user-portrait',
+    path: '/user-portrait',
+    getParentRoute: () => DashboardHomeRouteRoute,
+  } as any)
 const DashboardProfileIndexRoute = DashboardProfileIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -146,12 +171,15 @@ export interface FileRoutesByFullPath {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/dashboard/agents': typeof DashboardAgentsRouteRouteWithChildren
   '/dashboard/files': typeof DashboardFilesRouteRouteWithChildren
+  '/dashboard/home': typeof DashboardHomeRouteRouteWithChildren
   '/dashboard/profile': typeof DashboardProfileRouteRouteWithChildren
   '/dashboard/system': typeof DashboardSystemRouteRouteWithChildren
   '/dashboard/': typeof DashboardIndexRoute
   '/login/': typeof LoginIndexRoute
   '/dashboard/agents/connections': typeof DashboardAgentsConnectionsRoute
   '/dashboard/files/list': typeof DashboardFilesListRoute
+  '/dashboard/home/overview': typeof DashboardHomeOverviewRoute
+  '/dashboard/home/user-portrait': typeof DashboardHomeUserPortraitRoute
   '/dashboard/profile/agents': typeof DashboardProfileAgentsRoute
   '/dashboard/profile/password': typeof DashboardProfilePasswordRoute
   '/dashboard/system/audit': typeof DashboardSystemAuditRoute
@@ -160,6 +188,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/system/policies': typeof DashboardSystemPoliciesRoute
   '/dashboard/system/roles': typeof DashboardSystemRolesRoute
   '/dashboard/system/users': typeof DashboardSystemUsersRoute
+  '/dashboard/home/': typeof DashboardHomeIndexRoute
   '/dashboard/profile/': typeof DashboardProfileIndexRoute
 }
 export interface FileRoutesByTo {
@@ -173,6 +202,8 @@ export interface FileRoutesByTo {
   '/login': typeof LoginIndexRoute
   '/dashboard/agents/connections': typeof DashboardAgentsConnectionsRoute
   '/dashboard/files/list': typeof DashboardFilesListRoute
+  '/dashboard/home/overview': typeof DashboardHomeOverviewRoute
+  '/dashboard/home/user-portrait': typeof DashboardHomeUserPortraitRoute
   '/dashboard/profile/agents': typeof DashboardProfileAgentsRoute
   '/dashboard/profile/password': typeof DashboardProfilePasswordRoute
   '/dashboard/system/audit': typeof DashboardSystemAuditRoute
@@ -181,6 +212,7 @@ export interface FileRoutesByTo {
   '/dashboard/system/policies': typeof DashboardSystemPoliciesRoute
   '/dashboard/system/roles': typeof DashboardSystemRolesRoute
   '/dashboard/system/users': typeof DashboardSystemUsersRoute
+  '/dashboard/home': typeof DashboardHomeIndexRoute
   '/dashboard/profile': typeof DashboardProfileIndexRoute
 }
 export interface FileRoutesById {
@@ -191,12 +223,15 @@ export interface FileRoutesById {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/dashboard/agents': typeof DashboardAgentsRouteRouteWithChildren
   '/dashboard/files': typeof DashboardFilesRouteRouteWithChildren
+  '/dashboard/home': typeof DashboardHomeRouteRouteWithChildren
   '/dashboard/profile': typeof DashboardProfileRouteRouteWithChildren
   '/dashboard/system': typeof DashboardSystemRouteRouteWithChildren
   '/dashboard/': typeof DashboardIndexRoute
   '/login/': typeof LoginIndexRoute
   '/dashboard/agents/connections': typeof DashboardAgentsConnectionsRoute
   '/dashboard/files/list': typeof DashboardFilesListRoute
+  '/dashboard/home/overview': typeof DashboardHomeOverviewRoute
+  '/dashboard/home/user-portrait': typeof DashboardHomeUserPortraitRoute
   '/dashboard/profile/agents': typeof DashboardProfileAgentsRoute
   '/dashboard/profile/password': typeof DashboardProfilePasswordRoute
   '/dashboard/system/audit': typeof DashboardSystemAuditRoute
@@ -205,6 +240,7 @@ export interface FileRoutesById {
   '/dashboard/system/policies': typeof DashboardSystemPoliciesRoute
   '/dashboard/system/roles': typeof DashboardSystemRolesRoute
   '/dashboard/system/users': typeof DashboardSystemUsersRoute
+  '/dashboard/home/': typeof DashboardHomeIndexRoute
   '/dashboard/profile/': typeof DashboardProfileIndexRoute
 }
 export interface FileRouteTypes {
@@ -216,12 +252,15 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/dashboard/agents'
     | '/dashboard/files'
+    | '/dashboard/home'
     | '/dashboard/profile'
     | '/dashboard/system'
     | '/dashboard/'
     | '/login/'
     | '/dashboard/agents/connections'
     | '/dashboard/files/list'
+    | '/dashboard/home/overview'
+    | '/dashboard/home/user-portrait'
     | '/dashboard/profile/agents'
     | '/dashboard/profile/password'
     | '/dashboard/system/audit'
@@ -230,6 +269,7 @@ export interface FileRouteTypes {
     | '/dashboard/system/policies'
     | '/dashboard/system/roles'
     | '/dashboard/system/users'
+    | '/dashboard/home/'
     | '/dashboard/profile/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -243,6 +283,8 @@ export interface FileRouteTypes {
     | '/login'
     | '/dashboard/agents/connections'
     | '/dashboard/files/list'
+    | '/dashboard/home/overview'
+    | '/dashboard/home/user-portrait'
     | '/dashboard/profile/agents'
     | '/dashboard/profile/password'
     | '/dashboard/system/audit'
@@ -251,6 +293,7 @@ export interface FileRouteTypes {
     | '/dashboard/system/policies'
     | '/dashboard/system/roles'
     | '/dashboard/system/users'
+    | '/dashboard/home'
     | '/dashboard/profile'
   id:
     | '__root__'
@@ -260,12 +303,15 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/dashboard/agents'
     | '/dashboard/files'
+    | '/dashboard/home'
     | '/dashboard/profile'
     | '/dashboard/system'
     | '/dashboard/'
     | '/login/'
     | '/dashboard/agents/connections'
     | '/dashboard/files/list'
+    | '/dashboard/home/overview'
+    | '/dashboard/home/user-portrait'
     | '/dashboard/profile/agents'
     | '/dashboard/profile/password'
     | '/dashboard/system/audit'
@@ -274,6 +320,7 @@ export interface FileRouteTypes {
     | '/dashboard/system/policies'
     | '/dashboard/system/roles'
     | '/dashboard/system/users'
+    | '/dashboard/home/'
     | '/dashboard/profile/'
   fileRoutesById: FileRoutesById
 }
@@ -336,6 +383,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardFilesRouteRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
+    '/dashboard/home': {
+      id: '/dashboard/home'
+      path: '/home'
+      fullPath: '/dashboard/home'
+      preLoaderRoute: typeof DashboardHomeRouteRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
     '/dashboard/profile': {
       id: '/dashboard/profile'
       path: '/profile'
@@ -370,6 +424,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/dashboard/files/list'
       preLoaderRoute: typeof DashboardFilesListRouteImport
       parentRoute: typeof DashboardFilesRouteRoute
+    }
+    '/dashboard/home/': {
+      id: '/dashboard/home/'
+      path: '/'
+      fullPath: '/dashboard/home/'
+      preLoaderRoute: typeof DashboardHomeIndexRouteImport
+      parentRoute: typeof DashboardHomeRouteRoute
+    }
+    '/dashboard/home/overview': {
+      id: '/dashboard/home/overview'
+      path: '/overview'
+      fullPath: '/dashboard/home/overview'
+      preLoaderRoute: typeof DashboardHomeOverviewRouteImport
+      parentRoute: typeof DashboardHomeRouteRoute
+    }
+    '/dashboard/home/user-portrait': {
+      id: '/dashboard/home/user-portrait'
+      path: '/user-portrait'
+      fullPath: '/dashboard/home/user-portrait'
+      preLoaderRoute: typeof DashboardHomeUserPortraitRouteImport
+      parentRoute: typeof DashboardHomeRouteRoute
     }
     '/dashboard/profile/': {
       id: '/dashboard/profile/'
@@ -459,6 +534,21 @@ const DashboardFilesRouteRouteChildren: DashboardFilesRouteRouteChildren = {
 const DashboardFilesRouteRouteWithChildren =
   DashboardFilesRouteRoute._addFileChildren(DashboardFilesRouteRouteChildren)
 
+interface DashboardHomeRouteRouteChildren {
+  DashboardHomeOverviewRoute: typeof DashboardHomeOverviewRoute
+  DashboardHomeUserPortraitRoute: typeof DashboardHomeUserPortraitRoute
+  DashboardHomeIndexRoute: typeof DashboardHomeIndexRoute
+}
+
+const DashboardHomeRouteRouteChildren: DashboardHomeRouteRouteChildren = {
+  DashboardHomeOverviewRoute: DashboardHomeOverviewRoute,
+  DashboardHomeUserPortraitRoute: DashboardHomeUserPortraitRoute,
+  DashboardHomeIndexRoute: DashboardHomeIndexRoute,
+}
+
+const DashboardHomeRouteRouteWithChildren =
+  DashboardHomeRouteRoute._addFileChildren(DashboardHomeRouteRouteChildren)
+
 interface DashboardProfileRouteRouteChildren {
   DashboardProfileAgentsRoute: typeof DashboardProfileAgentsRoute
   DashboardProfilePasswordRoute: typeof DashboardProfilePasswordRoute
@@ -500,6 +590,7 @@ const DashboardSystemRouteRouteWithChildren =
 interface DashboardRouteRouteChildren {
   DashboardAgentsRouteRoute: typeof DashboardAgentsRouteRouteWithChildren
   DashboardFilesRouteRoute: typeof DashboardFilesRouteRouteWithChildren
+  DashboardHomeRouteRoute: typeof DashboardHomeRouteRouteWithChildren
   DashboardProfileRouteRoute: typeof DashboardProfileRouteRouteWithChildren
   DashboardSystemRouteRoute: typeof DashboardSystemRouteRouteWithChildren
   DashboardIndexRoute: typeof DashboardIndexRoute
@@ -508,6 +599,7 @@ interface DashboardRouteRouteChildren {
 const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
   DashboardAgentsRouteRoute: DashboardAgentsRouteRouteWithChildren,
   DashboardFilesRouteRoute: DashboardFilesRouteRouteWithChildren,
+  DashboardHomeRouteRoute: DashboardHomeRouteRouteWithChildren,
   DashboardProfileRouteRoute: DashboardProfileRouteRouteWithChildren,
   DashboardSystemRouteRoute: DashboardSystemRouteRouteWithChildren,
   DashboardIndexRoute: DashboardIndexRoute,

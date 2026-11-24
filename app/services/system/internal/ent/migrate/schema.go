@@ -163,6 +163,48 @@ var (
 			},
 		},
 	}
+	// EventLogColumns holds the columns for the "event_log" table.
+	EventLogColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 20},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "event_name", Type: field.TypeString, Size: 64, Comment: "事件词表名；聚合口径见 module/dashboard 的常量"},
+		{Name: "user_id", Type: field.TypeString, Nullable: true, Size: 20, Comment: "登录用户；注册前的匿名行为为 NULL"},
+		{Name: "anon_id", Type: field.TypeString, Nullable: true, Size: 64, Comment: "匿名设备标识；匿名行归因为用户由上游负责"},
+		{Name: "props", Type: field.TypeJSON, Nullable: true, Comment: "事件附加属性；聚合只按 event_name 计数，不依赖其结构"},
+		{Name: "channel", Type: field.TypeString, Nullable: true, Size: 20, Comment: "来源渠道；未采集为 NULL"},
+		{Name: "occurred_at", Type: field.TypeTime, Comment: "事件发生时刻（业务时钟）"},
+		{Name: "received_at", Type: field.TypeTime, Comment: "入库时刻（采集时钟）；与 occurred_at 的差值即上报延迟"},
+		{Name: "tenant_id", Type: field.TypeString, Size: 20, Comment: "所属租户；匿名事件为空", Default: ""},
+	}
+	// EventLogTable holds the schema information for the "event_log" table.
+	EventLogTable = &schema.Table{
+		Name:       "event_log",
+		Columns:    EventLogColumns,
+		PrimaryKey: []*schema.Column{EventLogColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "eventlog_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{EventLogColumns[1]},
+			},
+			{
+				Name:    "eventlog_updated_at",
+				Unique:  false,
+				Columns: []*schema.Column{EventLogColumns[2]},
+			},
+			{
+				Name:    "eventlog_event_name_occurred_at",
+				Unique:  false,
+				Columns: []*schema.Column{EventLogColumns[3], EventLogColumns[8]},
+			},
+			{
+				Name:    "eventlog_user_id_occurred_at",
+				Unique:  false,
+				Columns: []*schema.Column{EventLogColumns[4], EventLogColumns[8]},
+			},
+		},
+	}
 	// FileColumns holds the columns for the "file" table.
 	FileColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 20},
@@ -278,6 +320,39 @@ var (
 			},
 		},
 	}
+	// PlatformAnalyticsColumns holds the columns for the "platform_analytics" table.
+	PlatformAnalyticsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 20},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "date", Type: field.TypeTime, Comment: "统计日；日切后去时刻，写入前统一到租户时区的零点"},
+		{Name: "new_registrations", Type: field.TypeInt, Comment: "当日新增注册数", Default: 0},
+		{Name: "completed_tests", Type: field.TypeInt, Comment: "当日完成测评数", Default: 0},
+		{Name: "tenant_id", Type: field.TypeString, Size: 20, Comment: "所属租户", Default: ""},
+	}
+	// PlatformAnalyticsTable holds the schema information for the "platform_analytics" table.
+	PlatformAnalyticsTable = &schema.Table{
+		Name:       "platform_analytics",
+		Columns:    PlatformAnalyticsColumns,
+		PrimaryKey: []*schema.Column{PlatformAnalyticsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "platformanalytics_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{PlatformAnalyticsColumns[1]},
+			},
+			{
+				Name:    "platformanalytics_updated_at",
+				Unique:  false,
+				Columns: []*schema.Column{PlatformAnalyticsColumns[2]},
+			},
+			{
+				Name:    "platformanalytics_tenant_id_date",
+				Unique:  true,
+				Columns: []*schema.Column{PlatformAnalyticsColumns[6], PlatformAnalyticsColumns[3]},
+			},
+		},
+	}
 	// PrincipalRoleColumns holds the columns for the "principal_role" table.
 	PrincipalRoleColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 20},
@@ -384,18 +459,59 @@ var (
 			},
 		},
 	}
+	// UserReferralColumns holds the columns for the "user_referral" table.
+	UserReferralColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 20},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "referrer_id", Type: field.TypeString, Size: 20, Comment: "邀请人；与 system.User 的逻辑引用，不做外键"},
+		{Name: "referrer_name", Type: field.TypeString, Size: 64, Comment: "邀请时刻的展示名快照；活体身份在 system.User，快照只为让本表独立可渲染", Default: ""},
+		{Name: "invitee_id", Type: field.TypeString, Size: 20, Comment: "被邀人；一个用户至多被邀一次"},
+		{Name: "tenant_id", Type: field.TypeString, Size: 20, Comment: "所属租户", Default: ""},
+	}
+	// UserReferralTable holds the schema information for the "user_referral" table.
+	UserReferralTable = &schema.Table{
+		Name:       "user_referral",
+		Columns:    UserReferralColumns,
+		PrimaryKey: []*schema.Column{UserReferralColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "userreferral_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{UserReferralColumns[1]},
+			},
+			{
+				Name:    "userreferral_updated_at",
+				Unique:  false,
+				Columns: []*schema.Column{UserReferralColumns[2]},
+			},
+			{
+				Name:    "userreferral_invitee_id",
+				Unique:  true,
+				Columns: []*schema.Column{UserReferralColumns[5]},
+			},
+			{
+				Name:    "userreferral_referrer_id",
+				Unique:  false,
+				Columns: []*schema.Column{UserReferralColumns[3]},
+			},
+		},
+	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		AuditExportTable,
 		AuditLogTable,
 		PolicyTable,
 		DeptTable,
+		EventLogTable,
 		FileTable,
 		PermissionTable,
 		PermissionPolicyTable,
+		PlatformAnalyticsTable,
 		PrincipalRoleTable,
 		RoleTable,
 		UserTable,
+		UserReferralTable,
 	}
 )
 
@@ -412,6 +528,9 @@ func init() {
 	DeptTable.Annotation = &entsql.Annotation{
 		Table: "dept",
 	}
+	EventLogTable.Annotation = &entsql.Annotation{
+		Table: "event_log",
+	}
 	FileTable.Annotation = &entsql.Annotation{
 		Table: "file",
 	}
@@ -421,6 +540,9 @@ func init() {
 	PermissionPolicyTable.Annotation = &entsql.Annotation{
 		Table: "permission_policy",
 	}
+	PlatformAnalyticsTable.Annotation = &entsql.Annotation{
+		Table: "platform_analytics",
+	}
 	PrincipalRoleTable.Annotation = &entsql.Annotation{
 		Table: "principal_role",
 	}
@@ -429,5 +551,8 @@ func init() {
 	}
 	UserTable.Annotation = &entsql.Annotation{
 		Table: "user",
+	}
+	UserReferralTable.Annotation = &entsql.Annotation{
+		Table: "user_referral",
 	}
 }
