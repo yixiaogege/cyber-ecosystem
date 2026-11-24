@@ -22,13 +22,15 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// Bootstrap is the whole boot config tree; every field overrides a typed
+// default, none is required at the yaml layer.
 type Bootstrap struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Server        *Server                `protobuf:"bytes,1,opt,name=server,proto3" json:"server,omitempty"`
 	Data          *Data                  `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
 	Observability *Observability         `protobuf:"bytes,3,opt,name=observability,proto3" json:"observability,omitempty"`
 	Catalog       *Catalog               `protobuf:"bytes,4,opt,name=catalog,proto3" json:"catalog,omitempty"`
-	Authz         *Authz                 `protobuf:"bytes,5,opt,name=authz,proto3" json:"authz,omitempty"`
+	Auth          *Auth                  `protobuf:"bytes,5,opt,name=auth,proto3" json:"auth,omitempty"`
 	Seed          *Seed                  `protobuf:"bytes,6,opt,name=seed,proto3" json:"seed,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -92,9 +94,9 @@ func (x *Bootstrap) GetCatalog() *Catalog {
 	return nil
 }
 
-func (x *Bootstrap) GetAuthz() *Authz {
+func (x *Bootstrap) GetAuth() *Auth {
 	if x != nil {
-		return x.Authz
+		return x.Auth
 	}
 	return nil
 }
@@ -106,6 +108,7 @@ func (x *Bootstrap) GetSeed() *Seed {
 	return nil
 }
 
+// Server: the three listen faces; addr host:port.
 type Server struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Http          *Server_HTTP           `protobuf:"bytes,1,opt,name=http,proto3" json:"http,omitempty"`
@@ -166,6 +169,7 @@ func (x *Server) GetConnect() *Server_Connect {
 	return nil
 }
 
+// Data: the persistence plane — database, redis, storage, mq.
 type Data struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Database      *Data_Database         `protobuf:"bytes,1,opt,name=database,proto3" json:"database,omitempty"`
@@ -234,10 +238,11 @@ func (x *Data) GetMq() *Data_MQ {
 	return nil
 }
 
+// Observability: telemetry sinks share one collector endpoint.
 type Observability struct {
 	state         protoimpl.MessageState   `protogen:"open.v1"`
-	Endpoint      string                   `protobuf:"bytes,1,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
-	Insecure      bool                     `protobuf:"varint,2,opt,name=insecure,proto3" json:"insecure,omitempty"`
+	Endpoint      string                   `protobuf:"bytes,1,opt,name=endpoint,proto3" json:"endpoint,omitempty"`  // otlp http collector
+	Insecure      bool                     `protobuf:"varint,2,opt,name=insecure,proto3" json:"insecure,omitempty"` // skip tls to the collector
 	Trace         *Observability_Trace     `protobuf:"bytes,3,opt,name=trace,proto3" json:"trace,omitempty"`
 	Metrics       *Observability_Metrics   `protobuf:"bytes,4,opt,name=metrics,proto3" json:"metrics,omitempty"`
 	Log           *Observability_Log       `protobuf:"bytes,5,opt,name=log,proto3" json:"log,omitempty"`
@@ -318,6 +323,7 @@ func (x *Observability) GetSlowQuery() *Observability_SlowQuery {
 	return nil
 }
 
+// Catalog: where the generated service catalogs live for route registration.
 type Catalog struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Dir           string                 `protobuf:"bytes,1,opt,name=dir,proto3" json:"dir,omitempty"`
@@ -362,28 +368,28 @@ func (x *Catalog) GetDir() string {
 	return ""
 }
 
-type Authz struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	SuperAdmins     []string               `protobuf:"bytes,1,rep,name=super_admins,json=superAdmins,proto3" json:"super_admins,omitempty"`
-	InitialPassword string                 `protobuf:"bytes,2,opt,name=initial_password,json=initialPassword,proto3" json:"initial_password,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+// Auth: the credential providers; each row is one login channel instance.
+type Auth struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Providers     []*Auth_Provider       `protobuf:"bytes,1,rep,name=providers,proto3" json:"providers,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
-func (x *Authz) Reset() {
-	*x = Authz{}
+func (x *Auth) Reset() {
+	*x = Auth{}
 	mi := &file_internal_conf_conf_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *Authz) String() string {
+func (x *Auth) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Authz) ProtoMessage() {}
+func (*Auth) ProtoMessage() {}
 
-func (x *Authz) ProtoReflect() protoreflect.Message {
+func (x *Auth) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_conf_conf_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -395,30 +401,27 @@ func (x *Authz) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Authz.ProtoReflect.Descriptor instead.
-func (*Authz) Descriptor() ([]byte, []int) {
+// Deprecated: Use Auth.ProtoReflect.Descriptor instead.
+func (*Auth) Descriptor() ([]byte, []int) {
 	return file_internal_conf_conf_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *Authz) GetSuperAdmins() []string {
+func (x *Auth) GetProviders() []*Auth_Provider {
 	if x != nil {
-		return x.SuperAdmins
+		return x.Providers
 	}
 	return nil
 }
 
-func (x *Authz) GetInitialPassword() string {
-	if x != nil {
-		return x.InitialPassword
-	}
-	return ""
-}
-
-// Seed 只控制演示数据：开则平台运营分析的事件/邀请/日度汇总在首次启动时入库。
-// 生产部署保持关闭。
+// Seed: what a fresh deployment needs to grant its first operator.
 type Seed struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Demo          bool                   `protobuf:"varint,1,opt,name=demo,proto3" json:"demo,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	SuperAdmins *Seed_SuperAdmins      `protobuf:"bytes,1,opt,name=super_admins,json=superAdmins,proto3" json:"super_admins,omitempty"`
+	Populations []*Seed_Population     `protobuf:"bytes,3,rep,name=populations,proto3" json:"populations,omitempty"`
+	// Demo gates the demo seed: on first start it lands the platform analytics
+	// event/referral/daily-rollup series. A deployed environment keeps it off —
+	// it must not fabricate business data.
+	Demo          bool `protobuf:"varint,4,opt,name=demo,proto3" json:"demo,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -453,6 +456,20 @@ func (*Seed) Descriptor() ([]byte, []int) {
 	return file_internal_conf_conf_proto_rawDescGZIP(), []int{6}
 }
 
+func (x *Seed) GetSuperAdmins() *Seed_SuperAdmins {
+	if x != nil {
+		return x.SuperAdmins
+	}
+	return nil
+}
+
+func (x *Seed) GetPopulations() []*Seed_Population {
+	if x != nil {
+		return x.Populations
+	}
+	return nil
+}
+
 func (x *Seed) GetDemo() bool {
 	if x != nil {
 		return x.Demo
@@ -462,9 +479,9 @@ func (x *Seed) GetDemo() bool {
 
 type Server_HTTP struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Network       string                 `protobuf:"bytes,1,opt,name=network,proto3" json:"network,omitempty"`
+	Network       string                 `protobuf:"bytes,1,opt,name=network,proto3" json:"network,omitempty"` // tcp | unix
 	Addr          string                 `protobuf:"bytes,2,opt,name=addr,proto3" json:"addr,omitempty"`
-	Timeout       *durationpb.Duration   `protobuf:"bytes,3,opt,name=timeout,proto3" json:"timeout,omitempty"`
+	Timeout       *durationpb.Duration   `protobuf:"bytes,3,opt,name=timeout,proto3" json:"timeout,omitempty"` // whole-handler ceiling
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -642,7 +659,7 @@ func (x *Server_Connect) GetTimeout() *durationpb.Duration {
 
 type Data_Database struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
-	Driver          string                 `protobuf:"bytes,1,opt,name=driver,proto3" json:"driver,omitempty"`
+	Driver          string                 `protobuf:"bytes,1,opt,name=driver,proto3" json:"driver,omitempty"` // postgres
 	Host            string                 `protobuf:"bytes,2,opt,name=host,proto3" json:"host,omitempty"`
 	Port            int32                  `protobuf:"varint,3,opt,name=port,proto3" json:"port,omitempty"`
 	User            string                 `protobuf:"bytes,4,opt,name=user,proto3" json:"user,omitempty"`
@@ -753,7 +770,7 @@ type Data_Redis struct {
 	Network         string                 `protobuf:"bytes,1,opt,name=network,proto3" json:"network,omitempty"`
 	Addr            string                 `protobuf:"bytes,2,opt,name=addr,proto3" json:"addr,omitempty"`
 	Password        string                 `protobuf:"bytes,3,opt,name=password,proto3" json:"password,omitempty"`
-	Db              int32                  `protobuf:"varint,4,opt,name=db,proto3" json:"db,omitempty"`
+	Db              int32                  `protobuf:"varint,4,opt,name=db,proto3" json:"db,omitempty"` // logical db index 0–15
 	PoolSize        int32                  `protobuf:"varint,5,opt,name=pool_size,json=poolSize,proto3" json:"pool_size,omitempty"`
 	MinIdleConns    int32                  `protobuf:"varint,6,opt,name=min_idle_conns,json=minIdleConns,proto3" json:"min_idle_conns,omitempty"`
 	ConnMaxLifetime *durationpb.Duration   `protobuf:"bytes,7,opt,name=conn_max_lifetime,json=connMaxLifetime,proto3" json:"conn_max_lifetime,omitempty"`
@@ -872,6 +889,7 @@ func (x *Data_Redis) GetPoolTimeout() *durationpb.Duration {
 	return nil
 }
 
+// Storage: the s3-compatible object plane; one backend today.
 type Data_Storage struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	S3            *Data_Storage_S3       `protobuf:"bytes,1,opt,name=s3,proto3" json:"s3,omitempty"`
@@ -916,6 +934,7 @@ func (x *Data_Storage) GetS3() *Data_Storage_S3 {
 	return nil
 }
 
+// MQ: one backend active; nats and pg are alternatives.
 type Data_MQ struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Nats          *Data_MQ_NATS          `protobuf:"bytes,1,opt,name=nats,proto3" json:"nats,omitempty"`
@@ -970,17 +989,17 @@ func (x *Data_MQ) GetPg() *Data_MQ_PG {
 
 type Data_Storage_S3 struct {
 	state              protoimpl.MessageState `protogen:"open.v1"`
-	Endpoint           string                 `protobuf:"bytes,1,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
+	Endpoint           string                 `protobuf:"bytes,1,opt,name=endpoint,proto3" json:"endpoint,omitempty"` // service-facing api base
 	AccessKey          string                 `protobuf:"bytes,2,opt,name=access_key,json=accessKey,proto3" json:"access_key,omitempty"`
 	SecretKey          string                 `protobuf:"bytes,3,opt,name=secret_key,json=secretKey,proto3" json:"secret_key,omitempty"`
 	Bucket             string                 `protobuf:"bytes,4,opt,name=bucket,proto3" json:"bucket,omitempty"`
 	Region             string                 `protobuf:"bytes,5,opt,name=region,proto3" json:"region,omitempty"`
-	UsePathStyle       bool                   `protobuf:"varint,6,opt,name=use_path_style,json=usePathStyle,proto3" json:"use_path_style,omitempty"`
-	MultipartThreshold int64                  `protobuf:"varint,7,opt,name=multipart_threshold,json=multipartThreshold,proto3" json:"multipart_threshold,omitempty"`
-	PartSize           int64                  `protobuf:"varint,8,opt,name=part_size,json=partSize,proto3" json:"part_size,omitempty"`
-	PresignTtl         *durationpb.Duration   `protobuf:"bytes,9,opt,name=presign_ttl,json=presignTtl,proto3" json:"presign_ttl,omitempty"`
-	MaxFileSize        int64                  `protobuf:"varint,10,opt,name=max_file_size,json=maxFileSize,proto3" json:"max_file_size,omitempty"`       // bytes; 0 → no limit (consumed only by the s3 backend)
-	PublicEndpoint     string                 `protobuf:"bytes,11,opt,name=public_endpoint,json=publicEndpoint,proto3" json:"public_endpoint,omitempty"` // browser-facing base for presigned URLs; empty = endpoint
+	UsePathStyle       bool                   `protobuf:"varint,6,opt,name=use_path_style,json=usePathStyle,proto3" json:"use_path_style,omitempty"`                 // true for minio-style endpoints
+	MultipartThreshold int64                  `protobuf:"varint,7,opt,name=multipart_threshold,json=multipartThreshold,proto3" json:"multipart_threshold,omitempty"` // bytes; uploads above split
+	PartSize           int64                  `protobuf:"varint,8,opt,name=part_size,json=partSize,proto3" json:"part_size,omitempty"`                               // bytes; multipart part size
+	PresignTtl         *durationpb.Duration   `protobuf:"bytes,9,opt,name=presign_ttl,json=presignTtl,proto3" json:"presign_ttl,omitempty"`                          // presigned url validity
+	MaxFileSize        int64                  `protobuf:"varint,10,opt,name=max_file_size,json=maxFileSize,proto3" json:"max_file_size,omitempty"`                   // bytes; 0 = unlimited (s3 backend only)
+	PublicEndpoint     string                 `protobuf:"bytes,11,opt,name=public_endpoint,json=publicEndpoint,proto3" json:"public_endpoint,omitempty"`             // browser-facing base for presigned urls; empty = endpoint
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -1094,16 +1113,16 @@ func (x *Data_Storage_S3) GetPublicEndpoint() string {
 
 type Data_MQ_NATS struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
-	Endpoint       string                 `protobuf:"bytes,1,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
-	Creds          string                 `protobuf:"bytes,2,opt,name=creds,proto3" json:"creds,omitempty"`
-	MaxAge         *durationpb.Duration   `protobuf:"bytes,3,opt,name=max_age,json=maxAge,proto3" json:"max_age,omitempty"`
-	MaxBytes       int64                  `protobuf:"varint,4,opt,name=max_bytes,json=maxBytes,proto3" json:"max_bytes,omitempty"`
-	MaxRetries     int32                  `protobuf:"varint,5,opt,name=max_retries,json=maxRetries,proto3" json:"max_retries,omitempty"`
-	AckWait        *durationpb.Duration   `protobuf:"bytes,6,opt,name=ack_wait,json=ackWait,proto3" json:"ack_wait,omitempty"`
-	MaxAckPending  int32                  `protobuf:"varint,7,opt,name=max_ack_pending,json=maxAckPending,proto3" json:"max_ack_pending,omitempty"`    // in-flight unacked cap per consumer (0 → backend default)
-	DlqMaxAge      *durationpb.Duration   `protobuf:"bytes,8,opt,name=dlq_max_age,json=dlqMaxAge,proto3" json:"dlq_max_age,omitempty"`                 // DLQ stream TTL (0 → backend default)
-	DlqMaxBytes    int64                  `protobuf:"varint,9,opt,name=dlq_max_bytes,json=dlqMaxBytes,proto3" json:"dlq_max_bytes,omitempty"`          // DLQ stream size cap (0 → backend default)
-	NakBackoffStep *durationpb.Duration   `protobuf:"bytes,10,opt,name=nak_backoff_step,json=nakBackoffStep,proto3" json:"nak_backoff_step,omitempty"` // linear Nak redelivery delay step (0 → backend default)
+	Endpoint       string                 `protobuf:"bytes,1,opt,name=endpoint,proto3" json:"endpoint,omitempty"`                                      // nats://host:port
+	Creds          string                 `protobuf:"bytes,2,opt,name=creds,proto3" json:"creds,omitempty"`                                            // user creds file content; empty = no auth
+	MaxAge         *durationpb.Duration   `protobuf:"bytes,3,opt,name=max_age,json=maxAge,proto3" json:"max_age,omitempty"`                            // stream retention; 0 = backend default
+	MaxBytes       int64                  `protobuf:"varint,4,opt,name=max_bytes,json=maxBytes,proto3" json:"max_bytes,omitempty"`                     // stream size cap; 0 = backend default
+	MaxRetries     int32                  `protobuf:"varint,5,opt,name=max_retries,json=maxRetries,proto3" json:"max_retries,omitempty"`               // delivery attempts before dlq; 0 = backend default
+	AckWait        *durationpb.Duration   `protobuf:"bytes,6,opt,name=ack_wait,json=ackWait,proto3" json:"ack_wait,omitempty"`                         // redelivery wait; 0 = backend default
+	MaxAckPending  int32                  `protobuf:"varint,7,opt,name=max_ack_pending,json=maxAckPending,proto3" json:"max_ack_pending,omitempty"`    // per-consumer in-flight cap; 0 = backend default
+	DlqMaxAge      *durationpb.Duration   `protobuf:"bytes,8,opt,name=dlq_max_age,json=dlqMaxAge,proto3" json:"dlq_max_age,omitempty"`                 // 0 = backend default
+	DlqMaxBytes    int64                  `protobuf:"varint,9,opt,name=dlq_max_bytes,json=dlqMaxBytes,proto3" json:"dlq_max_bytes,omitempty"`          // 0 = backend default
+	NakBackoffStep *durationpb.Duration   `protobuf:"bytes,10,opt,name=nak_backoff_step,json=nakBackoffStep,proto3" json:"nak_backoff_step,omitempty"` // linear redelivery step; 0 = backend default
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1210,12 +1229,12 @@ func (x *Data_MQ_NATS) GetNakBackoffStep() *durationpb.Duration {
 
 type Data_MQ_PG struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
-	Dsn               string                 `protobuf:"bytes,1,opt,name=dsn,proto3" json:"dsn,omitempty"`                                                      // postgres://... to the standalone `mq` database
-	PollInterval      *durationpb.Duration   `protobuf:"bytes,2,opt,name=poll_interval,json=pollInterval,proto3" json:"poll_interval,omitempty"`                // consumer poll interval (0 → backend default)
-	VisibilityTimeout *durationpb.Duration   `protobuf:"bytes,3,opt,name=visibility_timeout,json=visibilityTimeout,proto3" json:"visibility_timeout,omitempty"` // = NATS ack_wait (0 → backend default)
-	MaxRetries        int32                  `protobuf:"varint,4,opt,name=max_retries,json=maxRetries,proto3" json:"max_retries,omitempty"`                     // delivery attempts before DLQ (0 → backend default)
-	Retention         *durationpb.Duration   `protobuf:"bytes,5,opt,name=retention,proto3" json:"retention,omitempty"`                                          // message retention, age-based eviction (0 → backend default)
-	BatchSize         int32                  `protobuf:"varint,6,opt,name=batch_size,json=batchSize,proto3" json:"batch_size,omitempty"`                        // max messages per poll batch (0 → backend default)
+	Dsn               string                 `protobuf:"bytes,1,opt,name=dsn,proto3" json:"dsn,omitempty"`                                                      // postgres://… to the standalone mq database
+	PollInterval      *durationpb.Duration   `protobuf:"bytes,2,opt,name=poll_interval,json=pollInterval,proto3" json:"poll_interval,omitempty"`                // 0 = backend default
+	VisibilityTimeout *durationpb.Duration   `protobuf:"bytes,3,opt,name=visibility_timeout,json=visibilityTimeout,proto3" json:"visibility_timeout,omitempty"` // = nats ack_wait; 0 = backend default
+	MaxRetries        int32                  `protobuf:"varint,4,opt,name=max_retries,json=maxRetries,proto3" json:"max_retries,omitempty"`                     // 0 = backend default
+	Retention         *durationpb.Duration   `protobuf:"bytes,5,opt,name=retention,proto3" json:"retention,omitempty"`                                          // age-based eviction; 0 = backend default
+	BatchSize         int32                  `protobuf:"varint,6,opt,name=batch_size,json=batchSize,proto3" json:"batch_size,omitempty"`                        // max messages per poll; 0 = backend default
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -1295,7 +1314,7 @@ func (x *Data_MQ_PG) GetBatchSize() int32 {
 type Observability_Trace struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Enabled       bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
-	SamplingRatio float64                `protobuf:"fixed64,2,opt,name=sampling_ratio,json=samplingRatio,proto3" json:"sampling_ratio,omitempty"`
+	SamplingRatio float64                `protobuf:"fixed64,2,opt,name=sampling_ratio,json=samplingRatio,proto3" json:"sampling_ratio,omitempty"` // 0–1
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1390,10 +1409,10 @@ func (x *Observability_Metrics) GetEnabled() bool {
 
 type Observability_Log struct {
 	state         protoimpl.MessageState        `protogen:"open.v1"`
-	Level         string                        `protobuf:"bytes,1,opt,name=level,proto3" json:"level,omitempty"`
+	Level         string                        `protobuf:"bytes,1,opt,name=level,proto3" json:"level,omitempty"` // debug | info | warn | error
 	Console       bool                          `protobuf:"varint,2,opt,name=console,proto3" json:"console,omitempty"`
 	Otlp          bool                          `protobuf:"varint,3,opt,name=otlp,proto3" json:"otlp,omitempty"`
-	File          *Observability_Log_FileOutput `protobuf:"bytes,4,opt,name=file,proto3" json:"file,omitempty"`
+	File          *Observability_Log_FileOutput `protobuf:"bytes,4,opt,name=file,proto3" json:"file,omitempty"` // absent = no file sink
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1458,8 +1477,8 @@ func (x *Observability_Log) GetFile() *Observability_Log_FileOutput {
 
 type Observability_SlowQuery struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Db            *durationpb.Duration   `protobuf:"bytes,1,opt,name=db,proto3" json:"db,omitempty"`       // slow SQL threshold; 0/omit = disabled
-	Cache         *durationpb.Duration   `protobuf:"bytes,2,opt,name=cache,proto3" json:"cache,omitempty"` // slow redis op threshold; 0/omit = disabled
+	Db            *durationpb.Duration   `protobuf:"bytes,1,opt,name=db,proto3" json:"db,omitempty"`       // slow sql threshold; 0/omit = off
+	Cache         *durationpb.Duration   `protobuf:"bytes,2,opt,name=cache,proto3" json:"cache,omitempty"` // slow redis op threshold; 0/omit = off
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1584,18 +1603,366 @@ func (x *Observability_Log_FileOutput) GetCompress() bool {
 	return false
 }
 
+type Auth_Provider struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`   // instance registry key; the login request's provider param
+	Kind          string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"` // code-registered kind; unknown fails boot
+	Enabled       bool                   `protobuf:"varint,3,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	Endpoint      string                 `protobuf:"bytes,4,opt,name=endpoint,proto3" json:"endpoint,omitempty"` // oauth base url for redirect and exchange; empty = kind defaults
+	Wechat        *Auth_Provider_WeChat  `protobuf:"bytes,5,opt,name=wechat,proto3" json:"wechat,omitempty"`
+	AutoRegister  bool                   `protobuf:"varint,6,opt,name=auto_register,json=autoRegister,proto3" json:"auto_register,omitempty"` // first login creates the account
+	Population    string                 `protobuf:"bytes,7,opt,name=population,proto3" json:"population,omitempty"`                          // landing population; empty = default population
+	Sms           *Auth_Provider_Sms     `protobuf:"bytes,8,opt,name=sms,proto3" json:"sms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Auth_Provider) Reset() {
+	*x = Auth_Provider{}
+	mi := &file_internal_conf_conf_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Auth_Provider) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Auth_Provider) ProtoMessage() {}
+
+func (x *Auth_Provider) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_conf_conf_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Auth_Provider.ProtoReflect.Descriptor instead.
+func (*Auth_Provider) Descriptor() ([]byte, []int) {
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{5, 0}
+}
+
+func (x *Auth_Provider) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *Auth_Provider) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *Auth_Provider) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *Auth_Provider) GetEndpoint() string {
+	if x != nil {
+		return x.Endpoint
+	}
+	return ""
+}
+
+func (x *Auth_Provider) GetWechat() *Auth_Provider_WeChat {
+	if x != nil {
+		return x.Wechat
+	}
+	return nil
+}
+
+func (x *Auth_Provider) GetAutoRegister() bool {
+	if x != nil {
+		return x.AutoRegister
+	}
+	return false
+}
+
+func (x *Auth_Provider) GetPopulation() string {
+	if x != nil {
+		return x.Population
+	}
+	return ""
+}
+
+func (x *Auth_Provider) GetSms() *Auth_Provider_Sms {
+	if x != nil {
+		return x.Sms
+	}
+	return nil
+}
+
+type Auth_Provider_WeChat struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Appid         string                 `protobuf:"bytes,1,opt,name=appid,proto3" json:"appid,omitempty"`
+	Secret        string                 `protobuf:"bytes,2,opt,name=secret,proto3" json:"secret,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Auth_Provider_WeChat) Reset() {
+	*x = Auth_Provider_WeChat{}
+	mi := &file_internal_conf_conf_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Auth_Provider_WeChat) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Auth_Provider_WeChat) ProtoMessage() {}
+
+func (x *Auth_Provider_WeChat) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_conf_conf_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Auth_Provider_WeChat.ProtoReflect.Descriptor instead.
+func (*Auth_Provider_WeChat) Descriptor() ([]byte, []int) {
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{5, 0, 0}
+}
+
+func (x *Auth_Provider_WeChat) GetAppid() string {
+	if x != nil {
+		return x.Appid
+	}
+	return ""
+}
+
+func (x *Auth_Provider_WeChat) GetSecret() string {
+	if x != nil {
+		return x.Secret
+	}
+	return ""
+}
+
+type Auth_Provider_Sms struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	AccessKeyId     string                 `protobuf:"bytes,1,opt,name=access_key_id,json=accessKeyId,proto3" json:"access_key_id,omitempty"`             // aliyun ram key (dysmsapi backend)
+	AccessKeySecret string                 `protobuf:"bytes,2,opt,name=access_key_secret,json=accessKeySecret,proto3" json:"access_key_secret,omitempty"` // deploy-plane fact; id set with empty secret = boot error
+	SignName        string                 `protobuf:"bytes,3,opt,name=sign_name,json=signName,proto3" json:"sign_name,omitempty"`                        // channel-assigned
+	TemplateCode    string                 `protobuf:"bytes,4,opt,name=template_code,json=templateCode,proto3" json:"template_code,omitempty"`            // channel-assigned; its placeholders name the params
+	Endpoint        string                 `protobuf:"bytes,5,opt,name=endpoint,proto3" json:"endpoint,omitempty"`                                        // empty = the kind default
+	Backend         string                 `protobuf:"bytes,6,opt,name=backend,proto3" json:"backend,omitempty"`                                          // "dysmsapi" (credential pair required) | "mock" (record, never dial)
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *Auth_Provider_Sms) Reset() {
+	*x = Auth_Provider_Sms{}
+	mi := &file_internal_conf_conf_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Auth_Provider_Sms) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Auth_Provider_Sms) ProtoMessage() {}
+
+func (x *Auth_Provider_Sms) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_conf_conf_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Auth_Provider_Sms.ProtoReflect.Descriptor instead.
+func (*Auth_Provider_Sms) Descriptor() ([]byte, []int) {
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{5, 0, 1}
+}
+
+func (x *Auth_Provider_Sms) GetAccessKeyId() string {
+	if x != nil {
+		return x.AccessKeyId
+	}
+	return ""
+}
+
+func (x *Auth_Provider_Sms) GetAccessKeySecret() string {
+	if x != nil {
+		return x.AccessKeySecret
+	}
+	return ""
+}
+
+func (x *Auth_Provider_Sms) GetSignName() string {
+	if x != nil {
+		return x.SignName
+	}
+	return ""
+}
+
+func (x *Auth_Provider_Sms) GetTemplateCode() string {
+	if x != nil {
+		return x.TemplateCode
+	}
+	return ""
+}
+
+func (x *Auth_Provider_Sms) GetEndpoint() string {
+	if x != nil {
+		return x.Endpoint
+	}
+	return ""
+}
+
+func (x *Auth_Provider_Sms) GetBackend() string {
+	if x != nil {
+		return x.Backend
+	}
+	return ""
+}
+
+type Seed_Population struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Code          string                 `protobuf:"bytes,1,opt,name=code,proto3" json:"code,omitempty"` // join key; declaring the default population is a config error
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Plane         string                 `protobuf:"bytes,3,opt,name=plane,proto3" json:"plane,omitempty"` // backend | member
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Seed_Population) Reset() {
+	*x = Seed_Population{}
+	mi := &file_internal_conf_conf_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Seed_Population) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Seed_Population) ProtoMessage() {}
+
+func (x *Seed_Population) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_conf_conf_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Seed_Population.ProtoReflect.Descriptor instead.
+func (*Seed_Population) Descriptor() ([]byte, []int) {
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{6, 0}
+}
+
+func (x *Seed_Population) GetCode() string {
+	if x != nil {
+		return x.Code
+	}
+	return ""
+}
+
+func (x *Seed_Population) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *Seed_Population) GetPlane() string {
+	if x != nil {
+		return x.Plane
+	}
+	return ""
+}
+
+type Seed_SuperAdmins struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Accounts        []string               `protobuf:"bytes,1,rep,name=accounts,proto3" json:"accounts,omitempty"`                                      // accounts seeded with full grants
+	InitialPassword string                 `protobuf:"bytes,2,opt,name=initial_password,json=initialPassword,proto3" json:"initial_password,omitempty"` // first-login password for the seeded accounts
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *Seed_SuperAdmins) Reset() {
+	*x = Seed_SuperAdmins{}
+	mi := &file_internal_conf_conf_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Seed_SuperAdmins) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Seed_SuperAdmins) ProtoMessage() {}
+
+func (x *Seed_SuperAdmins) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_conf_conf_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Seed_SuperAdmins.ProtoReflect.Descriptor instead.
+func (*Seed_SuperAdmins) Descriptor() ([]byte, []int) {
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{6, 1}
+}
+
+func (x *Seed_SuperAdmins) GetAccounts() []string {
+	if x != nil {
+		return x.Accounts
+	}
+	return nil
+}
+
+func (x *Seed_SuperAdmins) GetInitialPassword() string {
+	if x != nil {
+		return x.InitialPassword
+	}
+	return ""
+}
+
 var File_internal_conf_conf_proto protoreflect.FileDescriptor
 
 const file_internal_conf_conf_proto_rawDesc = "" +
 	"\n" +
 	"\x18internal/conf/conf.proto\x12\n" +
-	"cyber.conf\x1a\x1egoogle/protobuf/duration.proto\"\x9c\x02\n" +
+	"cyber.conf\x1a\x1egoogle/protobuf/duration.proto\"\x99\x02\n" +
 	"\tBootstrap\x12*\n" +
 	"\x06server\x18\x01 \x01(\v2\x12.cyber.conf.ServerR\x06server\x12$\n" +
 	"\x04data\x18\x02 \x01(\v2\x10.cyber.conf.DataR\x04data\x12?\n" +
 	"\robservability\x18\x03 \x01(\v2\x19.cyber.conf.ObservabilityR\robservability\x12-\n" +
-	"\acatalog\x18\x04 \x01(\v2\x13.cyber.conf.CatalogR\acatalog\x12'\n" +
-	"\x05authz\x18\x05 \x01(\v2\x11.cyber.conf.AuthzR\x05authz\x12$\n" +
+	"\acatalog\x18\x04 \x01(\v2\x13.cyber.conf.CatalogR\acatalog\x12$\n" +
+	"\x04auth\x18\x05 \x01(\v2\x10.cyber.conf.AuthR\x04auth\x12$\n" +
 	"\x04seed\x18\x06 \x01(\v2\x10.cyber.conf.SeedR\x04seed\"\xdc\x03\n" +
 	"\x06Server\x12+\n" +
 	"\x04http\x18\x01 \x01(\v2\x17.cyber.conf.Server.HTTPR\x04http\x12+\n" +
@@ -1715,12 +2082,42 @@ const file_internal_conf_conf_proto_rawDesc = "" +
 	"\x02db\x18\x01 \x01(\v2\x19.google.protobuf.DurationR\x02db\x12/\n" +
 	"\x05cache\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\x05cache\"\x1b\n" +
 	"\aCatalog\x12\x10\n" +
-	"\x03dir\x18\x01 \x01(\tR\x03dir\"U\n" +
-	"\x05Authz\x12!\n" +
-	"\fsuper_admins\x18\x01 \x03(\tR\vsuperAdmins\x12)\n" +
-	"\x10initial_password\x18\x02 \x01(\tR\x0finitialPassword\"\x1a\n" +
-	"\x04Seed\x12\x12\n" +
-	"\x04demo\x18\x01 \x01(\bR\x04demoB8Z6cyber-ecosystem/app/services/system/internal/conf;confb\x06proto3"
+	"\x03dir\x18\x01 \x01(\tR\x03dir\"\xe0\x04\n" +
+	"\x04Auth\x127\n" +
+	"\tproviders\x18\x01 \x03(\v2\x19.cyber.conf.Auth.ProviderR\tproviders\x1a\x9e\x04\n" +
+	"\bProvider\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x12\n" +
+	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x18\n" +
+	"\aenabled\x18\x03 \x01(\bR\aenabled\x12\x1a\n" +
+	"\bendpoint\x18\x04 \x01(\tR\bendpoint\x128\n" +
+	"\x06wechat\x18\x05 \x01(\v2 .cyber.conf.Auth.Provider.WeChatR\x06wechat\x12#\n" +
+	"\rauto_register\x18\x06 \x01(\bR\fautoRegister\x12\x1e\n" +
+	"\n" +
+	"population\x18\a \x01(\tR\n" +
+	"population\x12/\n" +
+	"\x03sms\x18\b \x01(\v2\x1d.cyber.conf.Auth.Provider.SmsR\x03sms\x1a6\n" +
+	"\x06WeChat\x12\x14\n" +
+	"\x05appid\x18\x01 \x01(\tR\x05appid\x12\x16\n" +
+	"\x06secret\x18\x02 \x01(\tR\x06secret\x1a\xcd\x01\n" +
+	"\x03Sms\x12\"\n" +
+	"\raccess_key_id\x18\x01 \x01(\tR\vaccessKeyId\x12*\n" +
+	"\x11access_key_secret\x18\x02 \x01(\tR\x0faccessKeySecret\x12\x1b\n" +
+	"\tsign_name\x18\x03 \x01(\tR\bsignName\x12#\n" +
+	"\rtemplate_code\x18\x04 \x01(\tR\ftemplateCode\x12\x1a\n" +
+	"\bendpoint\x18\x05 \x01(\tR\bendpoint\x12\x18\n" +
+	"\abackend\x18\x06 \x01(\tR\abackend\"\xbc\x02\n" +
+	"\x04Seed\x12?\n" +
+	"\fsuper_admins\x18\x01 \x01(\v2\x1c.cyber.conf.Seed.SuperAdminsR\vsuperAdmins\x12=\n" +
+	"\vpopulations\x18\x03 \x03(\v2\x1b.cyber.conf.Seed.PopulationR\vpopulations\x12\x12\n" +
+	"\x04demo\x18\x04 \x01(\bR\x04demo\x1aJ\n" +
+	"\n" +
+	"Population\x12\x12\n" +
+	"\x04code\x18\x01 \x01(\tR\x04code\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x14\n" +
+	"\x05plane\x18\x03 \x01(\tR\x05plane\x1aT\n" +
+	"\vSuperAdmins\x12\x1a\n" +
+	"\baccounts\x18\x01 \x03(\tR\baccounts\x12)\n" +
+	"\x10initial_password\x18\x02 \x01(\tR\x0finitialPasswordB8Z6cyber-ecosystem/app/services/system/internal/conf;confb\x06proto3"
 
 var (
 	file_internal_conf_conf_proto_rawDescOnce sync.Once
@@ -1734,14 +2131,14 @@ func file_internal_conf_conf_proto_rawDescGZIP() []byte {
 	return file_internal_conf_conf_proto_rawDescData
 }
 
-var file_internal_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
+var file_internal_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
 var file_internal_conf_conf_proto_goTypes = []any{
 	(*Bootstrap)(nil),                    // 0: cyber.conf.Bootstrap
 	(*Server)(nil),                       // 1: cyber.conf.Server
 	(*Data)(nil),                         // 2: cyber.conf.Data
 	(*Observability)(nil),                // 3: cyber.conf.Observability
 	(*Catalog)(nil),                      // 4: cyber.conf.Catalog
-	(*Authz)(nil),                        // 5: cyber.conf.Authz
+	(*Auth)(nil),                         // 5: cyber.conf.Auth
 	(*Seed)(nil),                         // 6: cyber.conf.Seed
 	(*Server_HTTP)(nil),                  // 7: cyber.conf.Server.HTTP
 	(*Server_GRPC)(nil),                  // 8: cyber.conf.Server.GRPC
@@ -1758,14 +2155,19 @@ var file_internal_conf_conf_proto_goTypes = []any{
 	(*Observability_Log)(nil),            // 19: cyber.conf.Observability.Log
 	(*Observability_SlowQuery)(nil),      // 20: cyber.conf.Observability.SlowQuery
 	(*Observability_Log_FileOutput)(nil), // 21: cyber.conf.Observability.Log.FileOutput
-	(*durationpb.Duration)(nil),          // 22: google.protobuf.Duration
+	(*Auth_Provider)(nil),                // 22: cyber.conf.Auth.Provider
+	(*Auth_Provider_WeChat)(nil),         // 23: cyber.conf.Auth.Provider.WeChat
+	(*Auth_Provider_Sms)(nil),            // 24: cyber.conf.Auth.Provider.Sms
+	(*Seed_Population)(nil),              // 25: cyber.conf.Seed.Population
+	(*Seed_SuperAdmins)(nil),             // 26: cyber.conf.Seed.SuperAdmins
+	(*durationpb.Duration)(nil),          // 27: google.protobuf.Duration
 }
 var file_internal_conf_conf_proto_depIdxs = []int32{
 	1,  // 0: cyber.conf.Bootstrap.server:type_name -> cyber.conf.Server
 	2,  // 1: cyber.conf.Bootstrap.data:type_name -> cyber.conf.Data
 	3,  // 2: cyber.conf.Bootstrap.observability:type_name -> cyber.conf.Observability
 	4,  // 3: cyber.conf.Bootstrap.catalog:type_name -> cyber.conf.Catalog
-	5,  // 4: cyber.conf.Bootstrap.authz:type_name -> cyber.conf.Authz
+	5,  // 4: cyber.conf.Bootstrap.auth:type_name -> cyber.conf.Auth
 	6,  // 5: cyber.conf.Bootstrap.seed:type_name -> cyber.conf.Seed
 	7,  // 6: cyber.conf.Server.http:type_name -> cyber.conf.Server.HTTP
 	8,  // 7: cyber.conf.Server.grpc:type_name -> cyber.conf.Server.GRPC
@@ -1778,34 +2180,39 @@ var file_internal_conf_conf_proto_depIdxs = []int32{
 	18, // 14: cyber.conf.Observability.metrics:type_name -> cyber.conf.Observability.Metrics
 	19, // 15: cyber.conf.Observability.log:type_name -> cyber.conf.Observability.Log
 	20, // 16: cyber.conf.Observability.slow_query:type_name -> cyber.conf.Observability.SlowQuery
-	22, // 17: cyber.conf.Server.HTTP.timeout:type_name -> google.protobuf.Duration
-	22, // 18: cyber.conf.Server.GRPC.timeout:type_name -> google.protobuf.Duration
-	22, // 19: cyber.conf.Server.Connect.timeout:type_name -> google.protobuf.Duration
-	22, // 20: cyber.conf.Data.Database.conn_max_lifetime:type_name -> google.protobuf.Duration
-	22, // 21: cyber.conf.Data.Redis.conn_max_lifetime:type_name -> google.protobuf.Duration
-	22, // 22: cyber.conf.Data.Redis.read_timeout:type_name -> google.protobuf.Duration
-	22, // 23: cyber.conf.Data.Redis.write_timeout:type_name -> google.protobuf.Duration
-	22, // 24: cyber.conf.Data.Redis.dial_timeout:type_name -> google.protobuf.Duration
-	22, // 25: cyber.conf.Data.Redis.pool_timeout:type_name -> google.protobuf.Duration
-	14, // 26: cyber.conf.Data.Storage.s3:type_name -> cyber.conf.Data.Storage.S3
-	15, // 27: cyber.conf.Data.MQ.nats:type_name -> cyber.conf.Data.MQ.NATS
-	16, // 28: cyber.conf.Data.MQ.pg:type_name -> cyber.conf.Data.MQ.PG
-	22, // 29: cyber.conf.Data.Storage.S3.presign_ttl:type_name -> google.protobuf.Duration
-	22, // 30: cyber.conf.Data.MQ.NATS.max_age:type_name -> google.protobuf.Duration
-	22, // 31: cyber.conf.Data.MQ.NATS.ack_wait:type_name -> google.protobuf.Duration
-	22, // 32: cyber.conf.Data.MQ.NATS.dlq_max_age:type_name -> google.protobuf.Duration
-	22, // 33: cyber.conf.Data.MQ.NATS.nak_backoff_step:type_name -> google.protobuf.Duration
-	22, // 34: cyber.conf.Data.MQ.PG.poll_interval:type_name -> google.protobuf.Duration
-	22, // 35: cyber.conf.Data.MQ.PG.visibility_timeout:type_name -> google.protobuf.Duration
-	22, // 36: cyber.conf.Data.MQ.PG.retention:type_name -> google.protobuf.Duration
-	21, // 37: cyber.conf.Observability.Log.file:type_name -> cyber.conf.Observability.Log.FileOutput
-	22, // 38: cyber.conf.Observability.SlowQuery.db:type_name -> google.protobuf.Duration
-	22, // 39: cyber.conf.Observability.SlowQuery.cache:type_name -> google.protobuf.Duration
-	40, // [40:40] is the sub-list for method output_type
-	40, // [40:40] is the sub-list for method input_type
-	40, // [40:40] is the sub-list for extension type_name
-	40, // [40:40] is the sub-list for extension extendee
-	0,  // [0:40] is the sub-list for field type_name
+	22, // 17: cyber.conf.Auth.providers:type_name -> cyber.conf.Auth.Provider
+	26, // 18: cyber.conf.Seed.super_admins:type_name -> cyber.conf.Seed.SuperAdmins
+	25, // 19: cyber.conf.Seed.populations:type_name -> cyber.conf.Seed.Population
+	27, // 20: cyber.conf.Server.HTTP.timeout:type_name -> google.protobuf.Duration
+	27, // 21: cyber.conf.Server.GRPC.timeout:type_name -> google.protobuf.Duration
+	27, // 22: cyber.conf.Server.Connect.timeout:type_name -> google.protobuf.Duration
+	27, // 23: cyber.conf.Data.Database.conn_max_lifetime:type_name -> google.protobuf.Duration
+	27, // 24: cyber.conf.Data.Redis.conn_max_lifetime:type_name -> google.protobuf.Duration
+	27, // 25: cyber.conf.Data.Redis.read_timeout:type_name -> google.protobuf.Duration
+	27, // 26: cyber.conf.Data.Redis.write_timeout:type_name -> google.protobuf.Duration
+	27, // 27: cyber.conf.Data.Redis.dial_timeout:type_name -> google.protobuf.Duration
+	27, // 28: cyber.conf.Data.Redis.pool_timeout:type_name -> google.protobuf.Duration
+	14, // 29: cyber.conf.Data.Storage.s3:type_name -> cyber.conf.Data.Storage.S3
+	15, // 30: cyber.conf.Data.MQ.nats:type_name -> cyber.conf.Data.MQ.NATS
+	16, // 31: cyber.conf.Data.MQ.pg:type_name -> cyber.conf.Data.MQ.PG
+	27, // 32: cyber.conf.Data.Storage.S3.presign_ttl:type_name -> google.protobuf.Duration
+	27, // 33: cyber.conf.Data.MQ.NATS.max_age:type_name -> google.protobuf.Duration
+	27, // 34: cyber.conf.Data.MQ.NATS.ack_wait:type_name -> google.protobuf.Duration
+	27, // 35: cyber.conf.Data.MQ.NATS.dlq_max_age:type_name -> google.protobuf.Duration
+	27, // 36: cyber.conf.Data.MQ.NATS.nak_backoff_step:type_name -> google.protobuf.Duration
+	27, // 37: cyber.conf.Data.MQ.PG.poll_interval:type_name -> google.protobuf.Duration
+	27, // 38: cyber.conf.Data.MQ.PG.visibility_timeout:type_name -> google.protobuf.Duration
+	27, // 39: cyber.conf.Data.MQ.PG.retention:type_name -> google.protobuf.Duration
+	21, // 40: cyber.conf.Observability.Log.file:type_name -> cyber.conf.Observability.Log.FileOutput
+	27, // 41: cyber.conf.Observability.SlowQuery.db:type_name -> google.protobuf.Duration
+	27, // 42: cyber.conf.Observability.SlowQuery.cache:type_name -> google.protobuf.Duration
+	23, // 43: cyber.conf.Auth.Provider.wechat:type_name -> cyber.conf.Auth.Provider.WeChat
+	24, // 44: cyber.conf.Auth.Provider.sms:type_name -> cyber.conf.Auth.Provider.Sms
+	45, // [45:45] is the sub-list for method output_type
+	45, // [45:45] is the sub-list for method input_type
+	45, // [45:45] is the sub-list for extension type_name
+	45, // [45:45] is the sub-list for extension extendee
+	0,  // [0:45] is the sub-list for field type_name
 }
 
 func init() { file_internal_conf_conf_proto_init() }
@@ -1819,7 +2226,7 @@ func file_internal_conf_conf_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_conf_conf_proto_rawDesc), len(file_internal_conf_conf_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   22,
+			NumMessages:   27,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

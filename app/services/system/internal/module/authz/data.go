@@ -2,51 +2,68 @@ package authz
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
-	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"cyber-ecosystem/shared-go/capability/cache"
 	"cyber-ecosystem/shared-go/kratos/security"
+	kauthz "cyber-ecosystem/shared-go/kratos/security/authz"
 
+	errorspb "cyber-ecosystem/gen/go/cyber/shared/errors/v1"
+
+	"cyber-ecosystem/app/services/system/internal/ent"
 	"cyber-ecosystem/app/services/system/internal/ent/authzpolicy"
+	"cyber-ecosystem/app/services/system/internal/ent/membership"
+	"cyber-ecosystem/app/services/system/internal/ent/schema/local_mixins"
 	"cyber-ecosystem/app/services/system/internal/ent/user"
 	"cyber-ecosystem/app/services/system/internal/platform"
 	"cyber-ecosystem/app/services/system/internal/shared"
 )
 
-const reconcileEvery = 5 * time.Minute
+const (
+	reconcileEvery    = 5 * time.Minute
+	forceRebuildEvery = 24 * time.Hour
+)
 
 // Repo ----------------------------------------------------------------------------------------------------------------
 
 type authzRP struct {
 	shared.RP
-	snap      atomic.Pointer[snapshot]
-	watchDone chan struct{}
-	watchSub  cache.Subscription
+	snap        atomic.Pointer[snapshot]
+	lastForced  atomic.Int64
+	watchDone   chan struct{}
+	watchSub    cache.Subscription
+	attrSources []kauthz.AttributeSource
+	// Serializes reconcile passes: concurrent triggers (a pubsub burst
+	// riding the 5-minute tick) would each pay the full-table rebuild for
+	// the same stamp version; under the lock the second pass re-reads the
+	// stamp and exits at the version gate.
+	mu sync.Mutex
 }
 
 func NewAuthzRP(logger *slog.Logger, p *platform.Platform) (AuthzRP, error) {
-	r := &authzRP{RP: shared.NewRP(logger.With("module", "module/authz"), p)}
+	r := &authzRP{RP: shared.NewRP(logger.With("module", "module/authz"), p),
+		attrSources: []kauthz.AttributeSource{timeSource{clock: time.Now}}}
 	// Every request reads the snapshot, so compile failure must fail
 	// construction.
 	ctx := context.Background()
-	snap, err := r.compileFromDB(ctx, r.remoteVersionSafe(ctx))
+	snap, err := r.compileFromDB(ctx, r.stampVersionSafe(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("authz rp: initial compile: %w", err)
 	}
 	r.snap.Store(snap)
+	r.lastForced.Store(time.Now().UnixNano())
 	return r, nil
 }
 
 // Method --------------------------------------------------------------------------------------------------------------
 
-func (r *authzRP) ImplicitGrants(ctx context.Context, userID, tenant string) ([]GrantView, error) {
-	snap := r.snap.Load()
+func (rp *authzRP) ImplicitGrants(ctx context.Context, userID, tenant string) ([]GrantView, error) {
+	snap := rp.snap.Load()
 	if snap == nil {
 		return nil, fmt.Errorf("authz rp: snapshot not compiled")
 	}
@@ -56,15 +73,17 @@ func (r *authzRP) ImplicitGrants(ctx context.Context, userID, tenant string) ([]
 	if err != nil {
 		return nil, fmt.Errorf("authz rp: resolve grants for %q: %w", userID, err)
 	}
-	views := make([]GrantView, 0, len(rows)+len(builtinOperations))
-	for _, op := range builtinOperations {
-		views = append(views, GrantView{Pattern: op})
-	}
+	views := make([]GrantView, 0, len(rows))
 	for _, row := range rows {
 		if len(row) < 3 {
 			continue
 		}
-		meta := snap.grants[grantKey{tenant, row[0], row[2]}]
+		// A row without its meta entry must vanish, never surface with the
+		// zero value: "" reads as tenant-wide, the opposite of narrowing.
+		meta, ok := snap.grants[grantKey{tenant, row[0], row[2]}]
+		if !ok {
+			continue
+		}
 		views = append(views, GrantView{
 			Pattern:     row[2],
 			ScopeKind:   meta.scopeKind,
@@ -72,23 +91,72 @@ func (r *authzRP) ImplicitGrants(ctx context.Context, userID, tenant string) ([]
 			Policies:    policyViews(meta.policies),
 		})
 	}
-	return r.hydrateScopes(ctx, userID, views)
+	return rp.hydrateScopes(ctx, userID, views)
 }
 
-func (r *authzRP) EffectiveGrants(ctx context.Context, subject *security.Subject) ([]GrantView, error) {
-	views, err := r.ImplicitGrants(ctx, subject.UserID, subject.TenantID)
+func (rp *authzRP) EffectiveGrants(ctx context.Context, subject *security.Subject) ([]GrantView, error) {
+	member, err := rp.MemberSubject(subject)
 	if err != nil {
 		return nil, err
 	}
-	return survivingGrants(ctx, r.Log, subject, views), nil
+	if member {
+		// The plane is the whole permission surface; the grant tables
+		// are never read.
+		return []GrantView{}, nil
+	}
+	views, err := rp.ImplicitGrants(ctx, subject.UserID, subject.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	return survivingGrants(ctx, rp.Log, subject, views, rp.attrSources), nil
+}
+func (rp *authzRP) MemberSubject(subject *security.Subject) (bool, error) {
+	// Member means the seat is structurally denied every gated face — the
+	// grant tables are never read. An empty population is the backend
+	// default. A population absent from the snapshot is a broken registry
+	// invariant: it fails closed as infra, never as a policy verdict.
+	if subject.Population == "" {
+		return false, nil
+	}
+	plane, ok := rp.snap.Load().populations[subject.Population]
+	if !ok {
+		return false, errorspb.ErrorGeneralErrorInternal("").WithCause(fmt.Errorf("population %q missing from the compiled registry", subject.Population))
+	}
+	return plane == security.PlaneMember, nil
 }
 
-func (r *authzRP) ExplainGrants(ctx context.Context, principalType, principalID, tenant, operation string) (*ExplainResult, error) {
-	snap := r.snap.Load()
+func (rp *authzRP) PlaneOf(population string) (string, error) {
+	// An empty population resolves as backend.
+	if population == "" {
+		return security.PlaneBackend, nil
+	}
+	plane, ok := rp.snap.Load().populations[population]
+	if !ok {
+		return "", errorspb.ErrorGeneralErrorInternal("").WithCause(fmt.Errorf("population %q missing from the compiled registry", population))
+	}
+	return plane, nil
+}
+
+func (rp *authzRP) ExplainGrants(ctx context.Context, principalType, principalID, tenant, operation string) (*ExplainResult, error) {
+	snap := rp.snap.Load()
 	if snap == nil {
 		return nil, fmt.Errorf("authz rp: snapshot not compiled")
 	}
-	out := &ExplainResult{Builtin: slices.Contains(builtinOperations, operation)}
+	out := &ExplainResult{}
+	if principalType == shared.PrincipalTypeUser {
+		population, err := rp.seatPopulation(ctx, principalID, tenant)
+		if err != nil {
+			return nil, err
+		}
+		member, err := rp.MemberSubject(&security.Subject{UserID: principalID, TenantID: tenant, Population: population})
+		if err != nil {
+			return nil, err
+		}
+		if member {
+			out.Allowed = false
+			return out, nil
+		}
+	}
 	subj := principalSubject(principalType, principalID)
 	// Grouping rows survive a role's disable, so the held-bindings list stays
 	// honest about what the principal holds even when grants are gone.
@@ -109,7 +177,12 @@ func (r *authzRP) ExplainGrants(ctx context.Context, principalType, principalID,
 		if len(row) < 3 || !matchOperation(operation, row[2]) {
 			continue
 		}
-		meta := snap.grants[grantKey{tenant, row[0], row[2]}]
+		// Same law as ImplicitGrants: a meta-less row vanishes rather than
+		// surface with a zero-value scope kind that reads as tenant-wide.
+		meta, ok := snap.grants[grantKey{tenant, row[0], row[2]}]
+		if !ok {
+			continue
+		}
 		views = append(views, GrantView{
 			Pattern:   row[2],
 			ScopeKind: meta.scopeKind,
@@ -117,16 +190,13 @@ func (r *authzRP) ExplainGrants(ctx context.Context, principalType, principalID,
 		})
 		codes = append(codes, strings.TrimPrefix(row[0], roleSubjectPrefix))
 	}
-	// Explain evaluates at explain time with the same kernel as Decide, so
-	// the verdict and the per-policy states agree with what enforcement
-	// would do this instant.
 	subject := &security.Subject{UserID: principalID, TenantID: tenant}
 	var attrs map[string]any
 	if anyLinkedPolicy(views) {
-		if attrs, err = resolveAttributes(ctx, subject, neededAttrKeys(views)); err != nil {
+		if attrs, err = resolveAttributes(ctx, subject, neededAttrKeys(views), rp.attrSources); err != nil {
 			// Decide's posture: unresolvable attributes fail every constraint
 			// closed; nil attrs make each plugin fail below, states show it.
-			r.Log.Error("authz: attribute resolution failed; constraints fail closed", "error", err)
+			rp.Log.Error("authz: attribute resolution failed; constraints fail closed", "error", err)
 			attrs = nil
 		}
 	}
@@ -135,7 +205,7 @@ func (r *authzRP) ExplainGrants(ctx context.Context, principalType, principalID,
 		passed := true
 		var states []PolicyState
 		if len(v.Policies) > 0 {
-			passed, states = evalGrantPolicies(ctx, r.Log, attrs, v.Policies)
+			passed, states = evalGrantPolicies(ctx, rp.Log, attrs, v.Policies)
 		}
 		survivedAny = survivedAny || passed
 		out.Hits = append(out.Hits, GrantHit{
@@ -145,20 +215,18 @@ func (r *authzRP) ExplainGrants(ctx context.Context, principalType, principalID,
 			Policies:  states,
 		})
 	}
-	out.Allowed = out.Builtin || survivedAny
+	out.Allowed = survivedAny
 	return out, nil
 }
 
-func (r *authzRP) PreviewGrants(ctx context.Context, tenant string, roleCodes []string) ([]string, error) {
-	snap := r.snap.Load()
+func (rp *authzRP) PreviewGrants(ctx context.Context, tenant string, roleCodes []string) ([]string, error) {
+	snap := rp.snap.Load()
 	if snap == nil {
 		return nil, fmt.Errorf("authz rp: snapshot not compiled")
 	}
 	seen := make(map[string]struct{}, 2*len(roleCodes))
 	ops := make([]string, 0, len(roleCodes))
 	for _, code := range roleCodes {
-		// The role's own policy rows: a disabled (or grantless) role simply
-		// contributes nothing — the same outcome enforcement would produce.
 		rows, err := snap.enf.GetPermissionsForUser(roleSubject(code), tenant)
 		if err != nil {
 			return nil, fmt.Errorf("authz rp: preview role %q: %w", code, err)
@@ -177,19 +245,22 @@ func (r *authzRP) PreviewGrants(ctx context.Context, tenant string, roleCodes []
 	return ops, nil
 }
 
-func (r *authzRP) StartWatch(context.Context) error {
-	if s, err := r.Platform.GetCache().PubSub.Subscribe(context.Background(), shared.PolicyChangedChannel); err != nil {
-		r.Log.Warn("authz: pubsub subscribe failed; periodic reconcile only", "error", err)
+func (rp *authzRP) StartWatch(context.Context) error {
+	if s, err := rp.Platform.GetCache().PubSub.Subscribe(context.Background(), shared.PolicyChangedChannel); err != nil {
+		rp.Log.Warn("authz: pubsub subscribe failed; periodic reconcile only", "error", err)
 	} else {
-		r.watchSub = s
+		rp.watchSub = s
+		// Pubsub has no backlog: a change published between the constructor's
+		// compile and this subscription is otherwise invisible until the tick.
+		rp.reconcile()
 	}
-	r.watchDone = make(chan struct{})
+	rp.watchDone = make(chan struct{})
 	go func() {
-		if r.watchSub == nil {
+		if rp.watchSub == nil {
 			return
 		}
-		for range r.watchSub.Channel() {
-			r.reconcile()
+		for range rp.watchSub.Channel() {
+			rp.reconcile()
 		}
 	}()
 	go func() {
@@ -197,112 +268,150 @@ func (r *authzRP) StartWatch(context.Context) error {
 		defer ticker.Stop()
 		for {
 			select {
-			case <-r.watchDone:
+			case <-rp.watchDone:
 				return
 			case <-ticker.C:
-				r.reconcile()
+				rp.reconcile()
 			}
 		}
 	}()
 	return nil
 }
 
-func (r *authzRP) StopWatch(context.Context) error {
-	if r.watchDone == nil {
+func (rp *authzRP) StopWatch(context.Context) error {
+	if rp.watchDone == nil {
 		return nil
 	}
-	close(r.watchDone)
-	if r.watchSub != nil {
-		_ = r.watchSub.Close()
+	close(rp.watchDone)
+	if rp.watchSub != nil {
+		_ = rp.watchSub.Close()
 	}
 	return nil
 }
 
 // Private -------------------------------------------------------------------------------------------------------------
 
-func (r *authzRP) reconcile() {
+func (rp *authzRP) reconcile() {
+	rp.mu.Lock()
+	defer rp.mu.Unlock()
 	ctx := context.Background()
-	ver, err := r.remoteVersion(ctx)
+	ver, err := rp.stampVersion(ctx)
 	if err != nil {
-		r.Log.Warn("authz: version read failed; keeping snapshot", "version", r.version(), "error", err)
+		rp.Log.Warn("authz: stamp read failed; keeping snapshot", "version", rp.version(), "error", err)
 		return
 	}
-	// >= so a stamp that ever moves backwards never pins an old snapshot.
-	if r.version() >= ver {
+	// != : any divergence from the stamp rebuilds. The stamp is the DB
+	// truth bumped inside the change transaction itself, so a replica that
+	// ever diverges — forwards, backwards, from a restored backup — heals
+	// on this pass; the old >= comparison pinned stale replicas forever
+	// whenever the stamp moved backwards (counter loss, a restore).
+	if rp.version() == ver && !forcedDue(rp.lastForced.Load(), time.Now()) {
 		return
 	}
-	if err := r.rebuild(ctx, ver); err != nil {
-		r.Log.Warn("authz: rebuild failed; keeping snapshot", "version", r.version(), "error", err)
+	if err := rp.rebuild(ctx, ver); err != nil {
+		rp.Log.Warn("authz: rebuild failed; keeping snapshot", "version", rp.version(), "error", err)
+		return
 	}
+	rp.lastForced.Store(time.Now().UnixNano())
 }
 
-func (r *authzRP) version() int64 {
-	if s := r.snap.Load(); s != nil {
+func (rp *authzRP) version() int64 {
+	if s := rp.snap.Load(); s != nil {
 		return s.version
 	}
 	return -1
 }
 
-func (r *authzRP) remoteVersion(ctx context.Context) (int64, error) {
-	ver, err := r.Platform.GetCache().Counter.Get(ctx, shared.PolicyVersionKey)
-	if errors.Is(err, cache.ErrKeyNotFound) {
-		return 0, nil // never bumped yet: version zero
-	}
-	return ver, err
+func (rp *authzRP) StampVersion(ctx context.Context) (int64, error) {
+	return rp.stampVersion(ctx)
 }
 
-func (r *authzRP) remoteVersionSafe(ctx context.Context) int64 {
-	ver, err := r.remoteVersion(ctx)
+func (rp *authzRP) stampVersion(ctx context.Context) (int64, error) {
+	row, err := rp.Platform.GetClient(ctx).AuthzStamp.Get(ctx, local_mixins.StampRowKey)
 	if err != nil {
-		// A Redis outage must not block startup; the first reconcile after
-		// recovery realigns the version.
-		r.Log.Warn("authz: initial version read failed; starting unversioned", "error", err)
+		if ent.IsNotFound(err) {
+			return 0, nil // no bump yet: version zero
+		}
+		return 0, rp.Platform.HandleEntError(err)
+	}
+	return row.Version, nil
+}
+
+func (rp *authzRP) stampVersionSafe(ctx context.Context) int64 {
+	ver, err := rp.stampVersion(ctx)
+	if err != nil {
+		// A stamp-read failure must not block startup; the first reconcile
+		// after recovery realigns the version.
+		rp.Log.Warn("authz: initial stamp read failed; starting unversioned", "error", err)
 		return -1
 	}
 	return ver
 }
 
-func (r *authzRP) rebuild(ctx context.Context, version int64) error {
-	snap, err := r.compileFromDB(ctx, version)
+func (rp *authzRP) seatPopulation(ctx context.Context, userID, tenant string) (string, error) {
+	rows, err := rp.Platform.GetClient(ctx).Membership.Query().
+		Where(membership.UserID(userID), membership.TenantID(tenant)).
+		All(ctx)
+	if err != nil {
+		return "", rp.Platform.HandleEntError(err)
+	}
+	single := ""
+	for _, row := range rows {
+		if single != "" && single != row.Population {
+			return "", nil // mixed: no single plane speaks for the identity (any backend seat keeps grants explainable)
+		}
+		single = row.Population
+	}
+	return single, nil
+}
+
+func (rp *authzRP) rebuild(ctx context.Context, version int64) error {
+	snap, err := rp.compileFromDB(ctx, version)
 	if err != nil {
 		return err
 	}
-	r.snap.Store(snap)
-	r.Log.Info("authz: snapshot rebuilt", "version", version)
+	rp.snap.Store(snap)
+	rp.Log.Info("authz: snapshot rebuilt", "version", version)
 	return nil
 }
 
-func (r *authzRP) compileFromDB(ctx context.Context, version int64) (*snapshot, error) {
-	// Scaling posture: a version-gated full-table reload is deliberate —
-	// idempotent, multi-replica safe, no delta ordering; it runs at
-	// policy-edit frequency, not ticker frequency. The first pressure point
-	// under load is not this compile but hydrateScopes' per-request dept
-	// scan — snapshot the tree there (a dept change bumps the version)
-	// before touching anything here.
-	client := r.Platform.GetClient(ctx)
+func (rp *authzRP) compileFromDB(ctx context.Context, version int64) (*snapshot, error) {
+	// Reload is version-gated and full-table: idempotent, multi-replica
+	// safe, no delta ordering; frequency is policy-edit rate. The first
+	// pressure point under load is hydrateScopes' per-request dept scan,
+	// not this compile.
+	client := rp.Platform.GetClient(ctx)
 	roles, err := client.Role.Query().All(ctx)
 	if err != nil {
-		return nil, r.Platform.HandleEntError(fmt.Errorf("authz compile: load roles: %w", err))
+		return nil, rp.Platform.HandleEntError(fmt.Errorf("authz compile: load roles: %w", err))
 	}
 	perms, err := client.Permission.Query().All(ctx)
 	if err != nil {
-		return nil, r.Platform.HandleEntError(fmt.Errorf("authz compile: load permissions: %w", err))
+		return nil, rp.Platform.HandleEntError(fmt.Errorf("authz compile: load permissions: %w", err))
 	}
 	polRows, err := client.AuthzPolicy.Query().Where(authzpolicy.EnabledEQ(true)).All(ctx)
 	if err != nil {
-		return nil, r.Platform.HandleEntError(fmt.Errorf("authz compile: load policies: %w", err))
+		return nil, rp.Platform.HandleEntError(fmt.Errorf("authz compile: load policies: %w", err))
 	}
 	linkRows, err := client.PermissionPolicy.Query().All(ctx)
 	if err != nil {
-		return nil, r.Platform.HandleEntError(fmt.Errorf("authz compile: load policy links: %w", err))
+		return nil, rp.Platform.HandleEntError(fmt.Errorf("authz compile: load policy links: %w", err))
 	}
 	bindings, err := client.PrincipalRole.Query().All(ctx)
 	if err != nil {
-		return nil, r.Platform.HandleEntError(fmt.Errorf("authz compile: load bindings: %w", err))
+		return nil, rp.Platform.HandleEntError(fmt.Errorf("authz compile: load bindings: %w", err))
+	}
+	popRows, err := client.Population.Query().All(ctx)
+	if err != nil {
+		return nil, rp.Platform.HandleEntError(fmt.Errorf("authz compile: load populations: %w", err))
+	}
+	populations := make(map[string]string, len(popRows))
+	for _, po := range popRows {
+		populations[po.Code] = po.Plane
 	}
 	disabledUsers, err := client.User.Query().Where(user.EnabledEQ(false)).All(ctx)
 	if err != nil {
-		return nil, r.Platform.HandleEntError(fmt.Errorf("authz compile: load disabled users: %w", err))
+		return nil, rp.Platform.HandleEntError(fmt.Errorf("authz compile: load disabled users: %w", err))
 	}
 	disabled := make(map[string]struct{}, len(disabledUsers))
 	for _, du := range disabledUsers {
@@ -375,7 +484,7 @@ func (r *authzRP) compileFromDB(ctx context.Context, version int64) (*snapshot, 
 			Enabled:       enabled,
 		})
 	}
-	return compile(version, grants, rows)
+	return compile(version, grants, rows, populations)
 }
 
 func policyViews(polys []policyMeta) []PolicyView {
@@ -387,4 +496,11 @@ func policyViews(polys []policyMeta) []PolicyView {
 		views = append(views, PolicyView{Kind: p.kind, Name: p.name, Params: p.params})
 	}
 	return views
+}
+
+func forcedDue(lastForcedNs int64, now time.Time) bool {
+	if lastForcedNs == 0 {
+		return true
+	}
+	return now.Sub(time.Unix(0, lastForcedNs)) >= forceRebuildEvery
 }

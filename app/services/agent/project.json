@@ -13,7 +13,9 @@
     },
     "generate:ent": {
       "executor": "nx:run-commands",
-      "dependsOn": ["proto:generate:go"],
+      "dependsOn": [
+        "proto:generate:go"
+      ],
       "options": {
         "cwd": "{projectRoot}",
         "command": "go generate ./internal/ent/..."
@@ -21,7 +23,9 @@
     },
     "generate:wire": {
       "executor": "nx:run-commands",
-      "dependsOn": ["proto:generate:go"],
+      "dependsOn": [
+        "proto:generate:go"
+      ],
       "options": {
         "cwd": "{projectRoot}",
         "command": "go generate ./cmd/app/..."
@@ -29,54 +33,67 @@
     },
     "generate": {
       "executor": "nx:run-commands",
-      "dependsOn": ["proto:generate", "proto:conf", "generate:ent", "generate:wire"],
+      "dependsOn": [
+        "proto:generate",
+        "proto:conf",
+        "generate:ent",
+        "generate:wire"
+      ],
       "options": {
         "cwd": "{workspaceRoot}",
-        "commands": ["go mod tidy"],
+        "commands": [
+          "go mod tidy"
+        ],
         "parallel": false
       }
     },
     "dev": {
       "executor": "nx:run-commands",
+      "description": "The env carries the dev-plane master key: a public dummy, not a secret (min-16-byte boot check only); real values are deploy-plane facts.",
       "options": {
         "cwd": "{projectRoot}",
-        "command": "go tool kratos run"
+        "command": "go tool kratos run",
+        "env": {
+          "AGENT_MASTER_KEY": "agent-dev-master-key"
+        }
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "outputs": [
+        "{projectRoot}/bin"
+      ],
+      "options": {
+        "cwd": "{projectRoot}",
+        "command": "go build -o ./bin/ ./..."
       }
     },
     "test": {
       "executor": "nx:run-commands",
       "options": {
         "cwd": "{projectRoot}",
-        "command": "go test ./..."
-      }
-    },
-    "build": {
-      "executor": "nx:run-commands",
-      "outputs": ["{projectRoot}/bin"],
-      "options": {
-        "cwd": "{projectRoot}",
-        "command": "go build -ldflags \"-X main.Version=$(git describe --tags --always)\" -o ./bin/ ./..."
+        "command": "go test -race -count=1 ./..."
       }
     },
     "image": {
       "executor": "nx:run-commands",
       "options": {
         "cwd": "{workspaceRoot}",
-        "command": "docker build -f app/services/agent/Dockerfile --build-arg VERSION=$(git describe --tags --always) --build-arg GOPROXY=\"$(go env GOPROXY)\" -t cyber-ecosystem/agent:local ."
+        "command": "docker build -f app/services/agent/Dockerfile -t cyber-ecosystem/agent:local ."
       }
     },
     "migrate:diff": {
       "executor": "nx:run-commands",
       "options": {
         "cwd": "{projectRoot}",
-        "command": "pnpm exec atlas migrate diff \"${NAME:-changes}\" --dir \"file://internal/ent/migrate/migrations\" --to \"ent://internal/ent/schema\" --dev-url \"${ATLAS_DEVDB:-postgres://postgres:postgres@localhost:5432/atlas_dev?sslmode=disable}\""
+        "command": "pnpm exec atlas migrate diff {args.name} --dir file://internal/ent/migrate/migrations --to ent://internal/ent/schema --dev-url postgres://postgres:postgres@localhost:5432/atlas_dev?sslmode=disable"
       }
     },
     "migrate:apply": {
       "executor": "nx:run-commands",
       "options": {
         "cwd": "{projectRoot}",
-        "command": "pnpm exec atlas migrate apply --dir \"file://internal/ent/migrate/migrations\" --url \"${DATABASE_URL:-postgres://postgres:postgres@localhost:5432/agent?sslmode=disable}\""
+        "command": "pnpm exec atlas migrate apply --dir file://internal/ent/migrate/migrations --url postgres://postgres:postgres@localhost:5432/agent?sslmode=disable"
       }
     },
     "migrate:validate": {

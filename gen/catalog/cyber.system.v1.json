@@ -16,7 +16,6 @@
         "http_method": "POST",
         "http_path": "/api/v1/system/audit-logs/export",
         "comment": "导出审计日志",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": false
       },
@@ -30,7 +29,6 @@
         "http_method": "GET",
         "http_path": "/api/v1/system/audit-logs/exports",
         "comment": "查询审计导出记录",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": true
       },
@@ -44,7 +42,6 @@
         "http_method": "GET",
         "http_path": "/api/v1/system/audit-logs",
         "comment": "查询审计日志",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": false
       }
@@ -58,6 +55,71 @@
     "comment": "认证与会话",
     "methods": [
       {
+        "name": "AdminUnbindCredential",
+        "full_name": "cyber.system.v1.AuthService.AdminUnbindCredential",
+        "request_name": "AdminUnbindCredentialRequest",
+        "request_full_name": "cyber.system.v1.AdminUnbindCredentialRequest",
+        "response_name": "AdminUnbindCredentialResponse",
+        "response_full_name": "cyber.system.v1.AdminUnbindCredentialResponse",
+        "http_method": "POST",
+        "http_path": "/api/v1/system/auth/admin-unbind-credential",
+        "comment": "管理端强制解绑：对指定用户移除一种登录方式；剩零可登途径时拒绝（与会员腿同律）",
+        "access": "ADMIN",
+        "datascope": false
+      },
+      {
+        "name": "BeginBindCredential",
+        "full_name": "cyber.system.v1.AuthService.BeginBindCredential",
+        "request_name": "BeginBindCredentialRequest",
+        "request_full_name": "cyber.system.v1.BeginBindCredentialRequest",
+        "response_name": "BeginBindCredentialResponse",
+        "response_full_name": "cyber.system.v1.BeginBindCredentialResponse",
+        "http_method": "POST",
+        "http_path": "/api/v1/system/auth/begin-bind-credential",
+        "comment": "发起凭证绑定：为已登录会话铸造绑定态授权跳转",
+        "access": "BUILTIN",
+        "datascope": false
+      },
+      {
+        "name": "BeginIdentityLogin",
+        "full_name": "cyber.system.v1.AuthService.BeginIdentityLogin",
+        "request_name": "BeginIdentityLoginRequest",
+        "request_full_name": "cyber.system.v1.BeginIdentityLoginRequest",
+        "response_name": "BeginIdentityLoginResponse",
+        "response_full_name": "cyber.system.v1.BeginIdentityLoginResponse",
+        "http_method": "POST",
+        "http_path": "/api/v1/system/auth/begin-identity-login",
+        "comment": "发起身份登录：铸造授权跳转",
+        "access": "PUBLIC",
+        "datascope": false
+      },
+      {
+        "name": "BindCredential",
+        "full_name": "cyber.system.v1.AuthService.BindCredential",
+        "request_name": "BindCredentialRequest",
+        "request_full_name": "cyber.system.v1.BindCredentialRequest",
+        "response_name": "BindCredentialResponse",
+        "response_full_name": "cyber.system.v1.BindCredentialResponse",
+        "http_method": "POST",
+        "http_path": "/api/v1/system/auth/bind-credential",
+        "comment": "绑定第三方身份凭证",
+        "access": "BUILTIN",
+        "datascope": false
+      },
+      {
+        "name": "ChangePassword",
+        "full_name": "cyber.system.v1.AuthService.ChangePassword",
+        "request_name": "ChangePasswordRequest",
+        "request_full_name": "cyber.system.v1.ChangePasswordRequest",
+        "response_name": "ChangePasswordResponse",
+        "response_full_name": "cyber.system.v1.ChangePasswordResponse",
+        "http_method": "POST",
+        "http_path": "/api/v1/system/me/password",
+        "comment": "修改密码",
+        "access": "BUILTIN",
+        "datascope": false
+      },
+      {
         "name": "GetCurrentUser",
         "full_name": "cyber.system.v1.AuthService.GetCurrentUser",
         "request_name": "GetCurrentUserRequest",
@@ -67,7 +129,45 @@
         "http_method": "GET",
         "http_path": "/api/v1/system/me",
         "comment": "获取当前登录用户",
-        "builtin": true,
+        "access": "BUILTIN",
+        "datascope": false
+      },
+      {
+        "name": "GetLoginConfig",
+        "full_name": "cyber.system.v1.AuthService.GetLoginConfig",
+        "request_name": "GetLoginConfigRequest",
+        "request_full_name": "cyber.system.v1.GetLoginConfigRequest",
+        "response_name": "GetLoginConfigResponse",
+        "response_full_name": "cyber.system.v1.GetLoginConfigResponse",
+        "http_method": "GET",
+        "http_path": "/api/v1/system/auth/login-config",
+        "comment": "登录页配置发现：列出启用的身份提供方，匿名可达",
+        "access": "PUBLIC",
+        "datascope": false
+      },
+      {
+        "name": "GetSecurityStatus",
+        "full_name": "cyber.system.v1.AuthService.GetSecurityStatus",
+        "request_name": "GetSecurityStatusRequest",
+        "request_full_name": "cyber.system.v1.GetSecurityStatusRequest",
+        "response_name": "GetSecurityStatusResponse",
+        "response_full_name": "cyber.system.v1.GetSecurityStatusResponse",
+        "http_method": "GET",
+        "http_path": "/api/v1/system/me/security",
+        "comment": "获取当前账号绑定面",
+        "access": "BUILTIN",
+        "datascope": false
+      },
+      {
+        "name": "ImportAccounts",
+        "full_name": "cyber.system.v1.AuthService.ImportAccounts",
+        "request_name": "ImportAccountsRequest",
+        "request_full_name": "cyber.system.v1.ImportAccountsRequest",
+        "response_name": "ImportAccountsResponse",
+        "response_full_name": "cyber.system.v1.ImportAccountsResponse",
+        "http_method": "POST",
+        "http_path": "/api/v1/system/auth/import-accounts",
+        "comment": "批量建号(sms 凭据)",
         "access": "ADMIN",
         "datascope": false
       },
@@ -81,7 +181,19 @@
         "http_method": "POST",
         "http_path": "/api/v1/system/auth/login",
         "comment": "登录",
-        "builtin": false,
+        "access": "PUBLIC",
+        "datascope": false
+      },
+      {
+        "name": "LoginByIdentity",
+        "full_name": "cyber.system.v1.AuthService.LoginByIdentity",
+        "request_name": "LoginByIdentityRequest",
+        "request_full_name": "cyber.system.v1.LoginByIdentityRequest",
+        "response_name": "LoginByIdentityResponse",
+        "response_full_name": "cyber.system.v1.LoginByIdentityResponse",
+        "http_method": "POST",
+        "http_path": "/api/v1/system/auth/login-by-identity",
+        "comment": "身份交换登录：第三方凭证换会话",
         "access": "PUBLIC",
         "datascope": false
       },
@@ -95,8 +207,59 @@
         "http_method": "POST",
         "http_path": "/api/v1/system/auth/logout",
         "comment": "登出",
-        "builtin": true,
-        "access": "ADMIN",
+        "access": "BUILTIN",
+        "datascope": false
+      },
+      {
+        "name": "ResetPassword",
+        "full_name": "cyber.system.v1.AuthService.ResetPassword",
+        "request_name": "ResetPasswordRequest",
+        "request_full_name": "cyber.system.v1.ResetPasswordRequest",
+        "response_name": "ResetPasswordResponse",
+        "response_full_name": "cyber.system.v1.ResetPasswordResponse",
+        "http_method": "POST",
+        "http_path": "/api/v1/system/auth/reset-password",
+        "comment": "重置登录密码：短信码证明手机号归属",
+        "access": "PUBLIC",
+        "datascope": false
+      },
+      {
+        "name": "SendBindSmsCode",
+        "full_name": "cyber.system.v1.AuthService.SendBindSmsCode",
+        "request_name": "SendBindSmsCodeRequest",
+        "request_full_name": "cyber.system.v1.SendBindSmsCodeRequest",
+        "response_name": "SendBindSmsCodeResponse",
+        "response_full_name": "cyber.system.v1.SendBindSmsCodeResponse",
+        "http_method": "POST",
+        "http_path": "/api/v1/system/auth/send-bind-sms-code",
+        "comment": "发送绑定用短信验证码：铸造绑定当前会话的一次性 state",
+        "access": "BUILTIN",
+        "datascope": false
+      },
+      {
+        "name": "SendSmsCode",
+        "full_name": "cyber.system.v1.AuthService.SendSmsCode",
+        "request_name": "SendSmsCodeRequest",
+        "request_full_name": "cyber.system.v1.SendSmsCodeRequest",
+        "response_name": "SendSmsCodeResponse",
+        "response_full_name": "cyber.system.v1.SendSmsCodeResponse",
+        "http_method": "POST",
+        "http_path": "/api/v1/system/auth/send-sms-code",
+        "comment": "发送短信验证码：铸造一次性 state 供 LoginByIdentity 消费",
+        "access": "PUBLIC",
+        "datascope": false
+      },
+      {
+        "name": "UnbindCredential",
+        "full_name": "cyber.system.v1.AuthService.UnbindCredential",
+        "request_name": "UnbindCredentialRequest",
+        "request_full_name": "cyber.system.v1.UnbindCredentialRequest",
+        "response_name": "UnbindCredentialResponse",
+        "response_full_name": "cyber.system.v1.UnbindCredentialResponse",
+        "http_method": "POST",
+        "http_path": "/api/v1/system/auth/unbind-credential",
+        "comment": "解绑身份凭证：移除当前账号的一种登录方式；剩零可登途径时拒绝",
+        "access": "BUILTIN",
         "datascope": false
       }
     ]
@@ -118,7 +281,6 @@
         "http_method": "GET",
         "http_path": "/api/v1/system/dashboard/overview",
         "comment": "查询运营总览",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": false
       },
@@ -132,7 +294,6 @@
         "http_method": "GET",
         "http_path": "/api/v1/system/dashboard/trend",
         "comment": "查询趋势",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": false
       }
@@ -155,7 +316,6 @@
         "http_method": "POST",
         "http_path": "/api/v1/system/depts",
         "comment": "创建部门",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": false
       },
@@ -169,7 +329,6 @@
         "http_method": "DELETE",
         "http_path": "/api/v1/system/depts/{id}",
         "comment": "删除部门",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": true
       },
@@ -183,7 +342,6 @@
         "http_method": "GET",
         "http_path": "/api/v1/system/depts/{id}",
         "comment": "查询部门详情",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": true
       },
@@ -197,7 +355,6 @@
         "http_method": "GET",
         "http_path": "/api/v1/system/depts/{dept_id}/members",
         "comment": "查询部门成员列表",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": true
       },
@@ -211,7 +368,6 @@
         "http_method": "GET",
         "http_path": "/api/v1/system/depts",
         "comment": "查询部门列表",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": true
       },
@@ -225,7 +381,6 @@
         "http_method": "DELETE",
         "http_path": "/api/v1/system/depts/{dept_id}/members/{user_id}",
         "comment": "移出部门成员",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": true
       },
@@ -239,7 +394,6 @@
         "http_method": "PUT",
         "http_path": "/api/v1/system/depts/{id}",
         "comment": "修改部门",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": true
       }
@@ -262,8 +416,7 @@
         "http_method": "DELETE",
         "http_path": "/api/v1/system/uploads/{id}",
         "comment": "放弃直传会话（终止分片会话并删除记录）",
-        "builtin": true,
-        "access": "ADMIN",
+        "access": "BUILTIN",
         "datascope": false
       },
       {
@@ -276,8 +429,7 @@
         "http_method": "POST",
         "http_path": "/api/v1/system/uploads/{id}/confirm",
         "comment": "确认直传（校验对象与大小，回填元数据）",
-        "builtin": true,
-        "access": "ADMIN",
+        "access": "BUILTIN",
         "datascope": false
       },
       {
@@ -290,8 +442,7 @@
         "http_method": "POST",
         "http_path": "/api/v1/system/uploads",
         "comment": "创建直传会话（登记元数据并铸造上传地址）",
-        "builtin": true,
-        "access": "ADMIN",
+        "access": "BUILTIN",
         "datascope": false
       },
       {
@@ -304,8 +455,7 @@
         "http_method": "GET",
         "http_path": "/api/v1/system/uploads/{id}/parts",
         "comment": "查询已传分片（断点续传恢复，补铸缺失分片地址）",
-        "builtin": true,
-        "access": "ADMIN",
+        "access": "BUILTIN",
         "datascope": false
       }
     ]
@@ -327,8 +477,7 @@
         "http_method": "POST",
         "http_path": "/api/v1/system/files/upload",
         "comment": "代理上传小文件",
-        "builtin": true,
-        "access": "ADMIN",
+        "access": "BUILTIN",
         "datascope": false
       }
     ]
@@ -350,7 +499,6 @@
         "http_method": "DELETE",
         "http_path": "/api/v1/system/files/{id}",
         "comment": "删除文件",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": true
       },
@@ -364,7 +512,6 @@
         "http_method": "GET",
         "http_path": "/api/v1/system/files/{id}",
         "comment": "查询文件详情",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": true
       },
@@ -378,8 +525,7 @@
         "http_method": "POST",
         "http_path": "/api/v1/system/files/urls",
         "comment": "铸造文件下载地址（批量）",
-        "builtin": true,
-        "access": "ADMIN",
+        "access": "BUILTIN",
         "datascope": false
       },
       {
@@ -392,7 +538,6 @@
         "http_method": "GET",
         "http_path": "/api/v1/system/files",
         "comment": "查询文件列表",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": true
       },
@@ -406,7 +551,6 @@
         "http_method": "PUT",
         "http_path": "/api/v1/system/files/{id}/name",
         "comment": "重命名文件",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": true
       }
@@ -429,8 +573,7 @@
         "http_method": "GET",
         "http_path": "/api/v1/system/me/introspect/operation",
         "comment": "授权自省（对当前用户裁决一个 operation）",
-        "builtin": true,
-        "access": "ADMIN",
+        "access": "BUILTIN",
         "datascope": false
       },
       {
@@ -443,8 +586,7 @@
         "http_method": "GET",
         "http_path": "/api/v1/system/me/introspect",
         "comment": "会话自省（调用方转发用户 cookie）",
-        "builtin": true,
-        "access": "ADMIN",
+        "access": "BUILTIN",
         "datascope": false
       }
     ]
@@ -466,7 +608,6 @@
         "http_method": "POST",
         "http_path": "/api/v1/system/policies",
         "comment": "创建策略",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": false
       },
@@ -480,7 +621,6 @@
         "http_method": "DELETE",
         "http_path": "/api/v1/system/policies/{id}",
         "comment": "删除策略",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": false
       },
@@ -494,7 +634,6 @@
         "http_method": "GET",
         "http_path": "/api/v1/system/policies/{id}",
         "comment": "查询策略详情",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": false
       },
@@ -508,7 +647,6 @@
         "http_method": "GET",
         "http_path": "/api/v1/system/policies",
         "comment": "查询策略列表",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": false
       },
@@ -522,8 +660,29 @@
         "http_method": "PUT",
         "http_path": "/api/v1/system/policies/{id}",
         "comment": "修改策略",
-        "builtin": false,
         "access": "ADMIN",
+        "datascope": false
+      }
+    ]
+  },
+  {
+    "name": "PopulationService",
+    "full_name": "cyber.system.v1.PopulationService",
+    "package": "cyber.system.v1",
+    "source_file": "cyber/system/v1/population.proto",
+    "comment": "用户类型",
+    "methods": [
+      {
+        "name": "ListPopulations",
+        "full_name": "cyber.system.v1.PopulationService.ListPopulations",
+        "request_name": "ListPopulationsRequest",
+        "request_full_name": "cyber.system.v1.ListPopulationsRequest",
+        "response_name": "ListPopulationsResponse",
+        "response_full_name": "cyber.system.v1.ListPopulationsResponse",
+        "http_method": "GET",
+        "http_path": "/api/v1/system/populations",
+        "comment": "用户类型列表",
+        "access": "PLATFORM",
         "datascope": false
       }
     ]
@@ -545,7 +704,6 @@
         "http_method": "GET",
         "http_path": "/api/v1/system/resource",
         "comment": "获取所有rpc信息",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": false
       }
@@ -568,7 +726,6 @@
         "http_method": "POST",
         "http_path": "/api/v1/system/roles",
         "comment": "创建角色",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": false
       },
@@ -582,7 +739,6 @@
         "http_method": "DELETE",
         "http_path": "/api/v1/system/roles/{id}",
         "comment": "删除角色",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": false
       },
@@ -596,7 +752,6 @@
         "http_method": "GET",
         "http_path": "/api/v1/system/authz/explain",
         "comment": "诊断解释",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": false
       },
@@ -610,7 +765,6 @@
         "http_method": "GET",
         "http_path": "/api/v1/system/roles/{id}",
         "comment": "查询角色详情",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": false
       },
@@ -624,7 +778,6 @@
         "http_method": "GET",
         "http_path": "/api/v1/system/roles/{role_id}/members",
         "comment": "查询角色成员列表",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": false
       },
@@ -638,7 +791,6 @@
         "http_method": "GET",
         "http_path": "/api/v1/system/roles",
         "comment": "查询角色列表",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": false
       },
@@ -652,7 +804,6 @@
         "http_method": "GET",
         "http_path": "/api/v1/system/principals/{principal_type}/{principal_id}/roles",
         "comment": "按主体查询角色",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": false
       },
@@ -666,7 +817,6 @@
         "http_method": "POST",
         "http_path": "/api/v1/system/authz/preview",
         "comment": "权限预览",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": false
       },
@@ -680,7 +830,6 @@
         "http_method": "DELETE",
         "http_path": "/api/v1/system/roles/{role_id}/members/{principal_type}/{principal_id}",
         "comment": "解绑角色成员",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": false
       },
@@ -694,7 +843,6 @@
         "http_method": "PUT",
         "http_path": "/api/v1/system/roles/{id}",
         "comment": "修改角色",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": false
       },
@@ -708,8 +856,81 @@
         "http_method": "PUT",
         "http_path": "/api/v1/system/roles/{id}/status",
         "comment": "启停角色",
-        "builtin": false,
         "access": "ADMIN",
+        "datascope": false
+      }
+    ]
+  },
+  {
+    "name": "TenantService",
+    "full_name": "cyber.system.v1.TenantService",
+    "package": "cyber.system.v1",
+    "source_file": "cyber/system/v1/tenant.proto",
+    "comment": "租户管理",
+    "methods": [
+      {
+        "name": "AddTenantAdmin",
+        "full_name": "cyber.system.v1.TenantService.AddTenantAdmin",
+        "request_name": "AddTenantAdminRequest",
+        "request_full_name": "cyber.system.v1.AddTenantAdminRequest",
+        "response_name": "AddTenantAdminResponse",
+        "response_full_name": "cyber.system.v1.AddTenantAdminResponse",
+        "http_method": "POST",
+        "http_path": "/api/v1/system/tenants/{tenant_code}/admins",
+        "comment": "给租户新增超级管理员：账号已有则加座授权，无则随密码创建",
+        "access": "PLATFORM",
+        "datascope": false
+      },
+      {
+        "name": "CreateTenant",
+        "full_name": "cyber.system.v1.TenantService.CreateTenant",
+        "request_name": "CreateTenantRequest",
+        "request_full_name": "cyber.system.v1.CreateTenantRequest",
+        "response_name": "CreateTenantResponse",
+        "response_full_name": "cyber.system.v1.CreateTenantResponse",
+        "http_method": "POST",
+        "http_path": "/api/v1/system/tenants",
+        "comment": "运行时开通租户：建租户与其超管角色（不带账号）",
+        "access": "PLATFORM",
+        "datascope": false
+      },
+      {
+        "name": "GetTenant",
+        "full_name": "cyber.system.v1.TenantService.GetTenant",
+        "request_name": "GetTenantRequest",
+        "request_full_name": "cyber.system.v1.GetTenantRequest",
+        "response_name": "GetTenantResponse",
+        "response_full_name": "cyber.system.v1.GetTenantResponse",
+        "http_method": "GET",
+        "http_path": "/api/v1/system/tenants/{id}",
+        "comment": "租户详情",
+        "access": "PLATFORM",
+        "datascope": false
+      },
+      {
+        "name": "ListTenants",
+        "full_name": "cyber.system.v1.TenantService.ListTenants",
+        "request_name": "ListTenantsRequest",
+        "request_full_name": "cyber.system.v1.ListTenantsRequest",
+        "response_name": "ListTenantsResponse",
+        "response_full_name": "cyber.system.v1.ListTenantsResponse",
+        "http_method": "GET",
+        "http_path": "/api/v1/system/tenants",
+        "comment": "租户列表",
+        "access": "PLATFORM",
+        "datascope": false
+      },
+      {
+        "name": "UpdateTenantStatus",
+        "full_name": "cyber.system.v1.TenantService.UpdateTenantStatus",
+        "request_name": "UpdateTenantStatusRequest",
+        "request_full_name": "cyber.system.v1.UpdateTenantStatusRequest",
+        "response_name": "UpdateTenantStatusResponse",
+        "response_full_name": "cyber.system.v1.UpdateTenantStatusResponse",
+        "http_method": "PUT",
+        "http_path": "/api/v1/system/tenants/{id}/status",
+        "comment": "启停租户",
+        "access": "PLATFORM",
         "datascope": false
       }
     ]
@@ -731,8 +952,7 @@
         "http_method": "GET",
         "http_path": "/api/v1/system/transfer/echo",
         "comment": "流式回显",
-        "builtin": true,
-        "access": "ADMIN",
+        "access": "BUILTIN",
         "datascope": false
       },
       {
@@ -745,8 +965,7 @@
         "http_method": "GET",
         "http_path": "/api/v1/system/transfer/pipe",
         "comment": "双向数据管道",
-        "builtin": true,
-        "access": "ADMIN",
+        "access": "BUILTIN",
         "datascope": false
       },
       {
@@ -759,8 +978,7 @@
         "http_method": "POST",
         "http_path": "/api/v1/system/transfer/raw",
         "comment": "原始字节响应",
-        "builtin": true,
-        "access": "ADMIN",
+        "access": "BUILTIN",
         "datascope": false
       },
       {
@@ -773,8 +991,7 @@
         "http_method": "GET",
         "http_path": "/api/v1/system/transfer/subscribe",
         "comment": "订阅事件流",
-        "builtin": true,
-        "access": "ADMIN",
+        "access": "BUILTIN",
         "datascope": false
       }
     ]
@@ -787,18 +1004,17 @@
     "comment": "用户管理",
     "methods": [
       {
-        "name": "ChangePassword",
-        "full_name": "cyber.system.v1.UserService.ChangePassword",
-        "request_name": "ChangePasswordRequest",
-        "request_full_name": "cyber.system.v1.ChangePasswordRequest",
-        "response_name": "ChangePasswordResponse",
-        "response_full_name": "cyber.system.v1.ChangePasswordResponse",
+        "name": "BatchGetUsers",
+        "full_name": "cyber.system.v1.UserService.BatchGetUsers",
+        "request_name": "BatchGetUsersRequest",
+        "request_full_name": "cyber.system.v1.BatchGetUsersRequest",
+        "response_name": "BatchGetUsersResponse",
+        "response_full_name": "cyber.system.v1.BatchGetUsersResponse",
         "http_method": "POST",
-        "http_path": "/api/v1/system/me/password",
-        "comment": "修改密码",
-        "builtin": true,
+        "http_path": "/api/v1/system/users/batch-get",
+        "comment": "批量查询用户概要",
         "access": "ADMIN",
-        "datascope": false
+        "datascope": true
       },
       {
         "name": "CreateUser",
@@ -810,7 +1026,6 @@
         "http_method": "POST",
         "http_path": "/api/v1/system/users",
         "comment": "创建用户",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": false
       },
@@ -824,7 +1039,6 @@
         "http_method": "DELETE",
         "http_path": "/api/v1/system/users/{id}",
         "comment": "删除用户",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": true
       },
@@ -838,7 +1052,6 @@
         "http_method": "GET",
         "http_path": "/api/v1/system/users/{id}",
         "comment": "查询用户详情",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": true
       },
@@ -852,7 +1065,19 @@
         "http_method": "GET",
         "http_path": "/api/v1/system/users",
         "comment": "查询用户列表",
-        "builtin": false,
+        "access": "ADMIN",
+        "datascope": true
+      },
+      {
+        "name": "ListUsersByPopulation",
+        "full_name": "cyber.system.v1.UserService.ListUsersByPopulation",
+        "request_name": "ListUsersByPopulationRequest",
+        "request_full_name": "cyber.system.v1.ListUsersByPopulationRequest",
+        "response_name": "ListUsersByPopulationResponse",
+        "response_full_name": "cyber.system.v1.ListUsersByPopulationResponse",
+        "http_method": "POST",
+        "http_path": "/api/v1/system/users/by-population",
+        "comment": "按人群枚举用户(组合面)",
         "access": "ADMIN",
         "datascope": true
       },
@@ -866,7 +1091,6 @@
         "http_method": "PUT",
         "http_path": "/api/v1/system/users/{id}",
         "comment": "修改用户",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": true
       },
@@ -880,7 +1104,6 @@
         "http_method": "PUT",
         "http_path": "/api/v1/system/users/{id}/status",
         "comment": "启停用户",
-        "builtin": false,
         "access": "ADMIN",
         "datascope": true
       }

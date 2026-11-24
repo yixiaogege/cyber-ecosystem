@@ -10,12 +10,6 @@
     ".": "./src/index.ts",
     "./route-transition": "./src/route-transition/index.ts"
   },
-  "scripts": {
-    "check": "biome check",
-    "format": "biome format",
-    "lint": "biome lint",
-    "typecheck": "tsc --noEmit"
-  },
   "dependencies": {
     "@cyber-ecosystem/shared-cookie": "workspace:*"
   },
@@ -29,6 +23,11 @@
   "devDependencies": {
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "typescript": "7.0.2"
+    "lucide-react": "1.73.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "typescript": "7.0.2",
+    "vitest": "5.1.0",
+    "zod": "4.6.7"
   }
 }

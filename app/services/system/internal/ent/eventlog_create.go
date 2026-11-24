@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect"
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -18,6 +20,7 @@ type EventLogCreate struct {
 	config
 	mutation *EventLogMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetCreatedAt sets the "created_at" field.
@@ -276,6 +279,7 @@ func (_c *EventLogCreate) createSpec() (*EventLog, *sqlgraph.CreateSpec) {
 		_node = &EventLog{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(eventlog.Table, sqlgraph.NewFieldSpec(eventlog.FieldID, field.TypeString))
 	)
+	_spec.OnConflict = _c.conflict
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
@@ -323,11 +327,236 @@ func (_c *EventLogCreate) createSpec() (*EventLog, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.EventLog.Create().
+//		SetCreatedAt(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.EventLogUpsert) {
+//			SetCreatedAt(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *EventLogCreate) OnConflict(opts ...sql.ConflictOption) *EventLogUpsertOne {
+	_c.conflict = opts
+	return &EventLogUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.EventLog.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *EventLogCreate) OnConflictColumns(columns ...string) *EventLogUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &EventLogUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// EventLogUpsertOne is the builder for "upsert"-ing
+	//  one EventLog node.
+	EventLogUpsertOne struct {
+		create *EventLogCreate
+	}
+
+	// EventLogUpsert is the "OnConflict" setter.
+	EventLogUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *EventLogUpsert) SetUpdatedAt(v time.Time) *EventLogUpsert {
+	u.Set(eventlog.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *EventLogUpsert) UpdateUpdatedAt() *EventLogUpsert {
+	u.SetExcluded(eventlog.FieldUpdatedAt)
+	return u
+}
+
+// SetProps sets the "props" field.
+func (u *EventLogUpsert) SetProps(v map[string]interface{}) *EventLogUpsert {
+	u.Set(eventlog.FieldProps, v)
+	return u
+}
+
+// UpdateProps sets the "props" field to the value that was provided on create.
+func (u *EventLogUpsert) UpdateProps() *EventLogUpsert {
+	u.SetExcluded(eventlog.FieldProps)
+	return u
+}
+
+// ClearProps clears the value of the "props" field.
+func (u *EventLogUpsert) ClearProps() *EventLogUpsert {
+	u.SetNull(eventlog.FieldProps)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create except the ID field.
+// Using this option is equivalent to using:
+//
+//	client.EventLog.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//			sql.ResolveWith(func(u *sql.UpdateSet) {
+//				u.SetIgnore(eventlog.FieldID)
+//			}),
+//		).
+//		Exec(ctx)
+func (u *EventLogUpsertOne) UpdateNewValues() *EventLogUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		if _, exists := u.create.mutation.ID(); exists {
+			s.SetIgnore(eventlog.FieldID)
+		}
+		if _, exists := u.create.mutation.CreatedAt(); exists {
+			s.SetIgnore(eventlog.FieldCreatedAt)
+		}
+		if _, exists := u.create.mutation.EventName(); exists {
+			s.SetIgnore(eventlog.FieldEventName)
+		}
+		if _, exists := u.create.mutation.UserID(); exists {
+			s.SetIgnore(eventlog.FieldUserID)
+		}
+		if _, exists := u.create.mutation.AnonID(); exists {
+			s.SetIgnore(eventlog.FieldAnonID)
+		}
+		if _, exists := u.create.mutation.Channel(); exists {
+			s.SetIgnore(eventlog.FieldChannel)
+		}
+		if _, exists := u.create.mutation.OccurredAt(); exists {
+			s.SetIgnore(eventlog.FieldOccurredAt)
+		}
+		if _, exists := u.create.mutation.ReceivedAt(); exists {
+			s.SetIgnore(eventlog.FieldReceivedAt)
+		}
+		if _, exists := u.create.mutation.TenantID(); exists {
+			s.SetIgnore(eventlog.FieldTenantID)
+		}
+	}))
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.EventLog.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *EventLogUpsertOne) Ignore() *EventLogUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *EventLogUpsertOne) DoNothing() *EventLogUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the EventLogCreate.OnConflict
+// documentation for more info.
+func (u *EventLogUpsertOne) Update(set func(*EventLogUpsert)) *EventLogUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&EventLogUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *EventLogUpsertOne) SetUpdatedAt(v time.Time) *EventLogUpsertOne {
+	return u.Update(func(s *EventLogUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *EventLogUpsertOne) UpdateUpdatedAt() *EventLogUpsertOne {
+	return u.Update(func(s *EventLogUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// SetProps sets the "props" field.
+func (u *EventLogUpsertOne) SetProps(v map[string]interface{}) *EventLogUpsertOne {
+	return u.Update(func(s *EventLogUpsert) {
+		s.SetProps(v)
+	})
+}
+
+// UpdateProps sets the "props" field to the value that was provided on create.
+func (u *EventLogUpsertOne) UpdateProps() *EventLogUpsertOne {
+	return u.Update(func(s *EventLogUpsert) {
+		s.UpdateProps()
+	})
+}
+
+// ClearProps clears the value of the "props" field.
+func (u *EventLogUpsertOne) ClearProps() *EventLogUpsertOne {
+	return u.Update(func(s *EventLogUpsert) {
+		s.ClearProps()
+	})
+}
+
+// Exec executes the query.
+func (u *EventLogUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for EventLogCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *EventLogUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *EventLogUpsertOne) ID(ctx context.Context) (id string, err error) {
+	if u.create.driver.Dialect() == dialect.MySQL {
+		// In case of "ON CONFLICT", there is no way to get back non-numeric ID
+		// fields from the database since MySQL does not support the RETURNING clause.
+		return id, errors.New("ent: EventLogUpsertOne.ID is not supported by MySQL driver. Use EventLogUpsertOne.Exec instead")
+	}
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *EventLogUpsertOne) IDX(ctx context.Context) string {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // EventLogCreateBulk is the builder for creating many EventLog entities in bulk.
 type EventLogCreateBulk struct {
 	config
 	err      error
 	builders []*EventLogCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the EventLog entities in the database.
@@ -357,6 +586,7 @@ func (_c *EventLogCreateBulk) Save(ctx context.Context) ([]*EventLog, error) {
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -403,6 +633,179 @@ func (_c *EventLogCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *EventLogCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.EventLog.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.EventLogUpsert) {
+//			SetCreatedAt(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *EventLogCreateBulk) OnConflict(opts ...sql.ConflictOption) *EventLogUpsertBulk {
+	_c.conflict = opts
+	return &EventLogUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.EventLog.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *EventLogCreateBulk) OnConflictColumns(columns ...string) *EventLogUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &EventLogUpsertBulk{
+		create: _c,
+	}
+}
+
+// EventLogUpsertBulk is the builder for "upsert"-ing
+// a bulk of EventLog nodes.
+type EventLogUpsertBulk struct {
+	create *EventLogCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.EventLog.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//			sql.ResolveWith(func(u *sql.UpdateSet) {
+//				u.SetIgnore(eventlog.FieldID)
+//			}),
+//		).
+//		Exec(ctx)
+func (u *EventLogUpsertBulk) UpdateNewValues() *EventLogUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		for _, b := range u.create.builders {
+			if _, exists := b.mutation.ID(); exists {
+				s.SetIgnore(eventlog.FieldID)
+			}
+			if _, exists := b.mutation.CreatedAt(); exists {
+				s.SetIgnore(eventlog.FieldCreatedAt)
+			}
+			if _, exists := b.mutation.EventName(); exists {
+				s.SetIgnore(eventlog.FieldEventName)
+			}
+			if _, exists := b.mutation.UserID(); exists {
+				s.SetIgnore(eventlog.FieldUserID)
+			}
+			if _, exists := b.mutation.AnonID(); exists {
+				s.SetIgnore(eventlog.FieldAnonID)
+			}
+			if _, exists := b.mutation.Channel(); exists {
+				s.SetIgnore(eventlog.FieldChannel)
+			}
+			if _, exists := b.mutation.OccurredAt(); exists {
+				s.SetIgnore(eventlog.FieldOccurredAt)
+			}
+			if _, exists := b.mutation.ReceivedAt(); exists {
+				s.SetIgnore(eventlog.FieldReceivedAt)
+			}
+			if _, exists := b.mutation.TenantID(); exists {
+				s.SetIgnore(eventlog.FieldTenantID)
+			}
+		}
+	}))
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.EventLog.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *EventLogUpsertBulk) Ignore() *EventLogUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *EventLogUpsertBulk) DoNothing() *EventLogUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the EventLogCreateBulk.OnConflict
+// documentation for more info.
+func (u *EventLogUpsertBulk) Update(set func(*EventLogUpsert)) *EventLogUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&EventLogUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *EventLogUpsertBulk) SetUpdatedAt(v time.Time) *EventLogUpsertBulk {
+	return u.Update(func(s *EventLogUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *EventLogUpsertBulk) UpdateUpdatedAt() *EventLogUpsertBulk {
+	return u.Update(func(s *EventLogUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// SetProps sets the "props" field.
+func (u *EventLogUpsertBulk) SetProps(v map[string]interface{}) *EventLogUpsertBulk {
+	return u.Update(func(s *EventLogUpsert) {
+		s.SetProps(v)
+	})
+}
+
+// UpdateProps sets the "props" field to the value that was provided on create.
+func (u *EventLogUpsertBulk) UpdateProps() *EventLogUpsertBulk {
+	return u.Update(func(s *EventLogUpsert) {
+		s.UpdateProps()
+	})
+}
+
+// ClearProps clears the value of the "props" field.
+func (u *EventLogUpsertBulk) ClearProps() *EventLogUpsertBulk {
+	return u.Update(func(s *EventLogUpsert) {
+		s.ClearProps()
+	})
+}
+
+// Exec executes the query.
+func (u *EventLogUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the EventLogCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for EventLogCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *EventLogUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

@@ -29,7 +29,7 @@ function qualityLabel(key: number): string {
 export function QualityChart({ rows }: Readonly<{ rows: readonly QualityRow[] }>) {
   return (
     <div className="flex flex-col gap-3 px-4 pt-3 pb-2">
-      <div className={`${ROW} border-line border-b pb-0.5 text-[10.5px] text-ink-tertiary`}>
+      <div className={`${ROW} border-line text-ink-tertiary border-b pb-0.5 text-[10.5px]`}>
         <span>{m.dashboard_overview_quality_col_metric()}</span>
         <span>{m.dashboard_overview_quality_col_axis()}</span>
         <span className="text-right">{m.dashboard_overview_quality_col_delta()}</span>
@@ -41,11 +41,11 @@ export function QualityChart({ rows }: Readonly<{ rows: readonly QualityRow[] }>
         ];
         return (
           <div className={ROW} key={row.key}>
-            <span className="pb-0.5 text-ink-secondary text-xs">{qualityLabel(row.key)}</span>
-            <div className="flex h-[74px] items-end gap-2.5 border-line border-b">
+            <span className="text-ink-secondary pb-0.5 text-xs">{qualityLabel(row.key)}</span>
+            <div className="border-line flex h-[74px] items-end gap-2.5 border-b">
               {bars.map((bar) => (
                 <div className="flex h-full flex-col justify-end" key={bar.key}>
-                  <span className="mb-1 text-[10.5px] text-ink-secondary tabular-nums">
+                  <span className="text-ink-secondary mb-1 text-[10.5px] tabular-nums">
                     {pct(bar.value)}
                   </span>
                   <span
@@ -60,7 +60,7 @@ export function QualityChart({ rows }: Readonly<{ rows: readonly QualityRow[] }>
               ))}
             </div>
             <span
-              className={`pb-0.5 text-right font-extrabold text-xs tabular-nums ${
+              className={`pb-0.5 text-right text-xs font-extrabold tabular-nums ${
                 row.deltaPp >= 0 ? "text-success" : "text-error"
               }`}
             >

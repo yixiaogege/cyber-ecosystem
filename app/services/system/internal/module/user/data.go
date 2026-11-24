@@ -2,18 +2,33 @@ package user
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"log/slog"
 
+	entsql "entgo.io/ent/dialect/sql"
+
 	"cyber-ecosystem/shared-go/helper"
+	"cyber-ecosystem/shared-go/kratos/security"
 	"cyber-ecosystem/shared-go/utils"
 
+	errorspb "cyber-ecosystem/gen/go/cyber/shared/errors/v1"
+
 	"cyber-ecosystem/app/services/system/internal/ent"
+	"cyber-ecosystem/app/services/system/internal/ent/credential"
+	"cyber-ecosystem/app/services/system/internal/ent/membership"
+	"cyber-ecosystem/app/services/system/internal/ent/population"
 	"cyber-ecosystem/app/services/system/internal/ent/predicate"
 	"cyber-ecosystem/app/services/system/internal/ent/principalrole"
 	"cyber-ecosystem/app/services/system/internal/ent/role"
 	"cyber-ecosystem/app/services/system/internal/ent/user"
 	"cyber-ecosystem/app/services/system/internal/platform"
 	"cyber-ecosystem/app/services/system/internal/shared"
+)
+
+const (
+	rosterKindSMS      = "sms"       // the auth providers' registry values, kept local rather than importing that module's privates
+	rosterKindWechatMP = "wechat_mp" // ditto
 )
 
 // Repo ----------------------------------------------------------------------------------------------------------------
@@ -34,7 +49,7 @@ func (rp *userRP) Create(ctx context.Context, u *User) (*User, error) {
 	created, err := rp.Platform.GetClient(ctx).User.Create().
 		SetNillableDeptID(u.DeptID).
 		SetNillableAvatar(u.Avatar).
-		SetEmail(*u.Email).
+		SetAccount(*u.Account).
 		SetPasswordHash(*u.PasswordHash).
 		Save(ctx)
 	if err != nil {
@@ -46,11 +61,6 @@ func (rp *userRP) Create(ctx context.Context, u *User) (*User, error) {
 func (rp *userRP) Update(ctx context.Context, fieldsMask []string, u *User) (*User, error) {
 	updater := rp.Platform.GetClient(ctx).User.UpdateOneID(u.ID)
 	helper.Handler{
-		"email": {
-			Condition: u.Email != nil,
-			OnTrue:    func() { updater.SetEmail(*u.Email) },
-			OnFalse:   func() {},
-		},
 		"password": {
 			Condition: u.PasswordHash != nil,
 			OnTrue:    func() { updater.SetPasswordHash(*u.PasswordHash) },
@@ -89,22 +99,29 @@ func (rp *userRP) Delete(ctx context.Context, id string) (string, error) {
 	return id, nil
 }
 
-func (rp *userRP) List(ctx context.Context, in *UserListIn) (*UserListOut, error) {
+func (rp *userRP) List(ctx context.Context, in *ListIn) (*ListOut, error) {
 	query := rp.Platform.GetClient(ctx).User.Query()
+	// The admin face lists the caller's tenant's members — seats, not
+	// birthplace: an identity seated here is visible regardless of where
+	// the row originates. A subjectless context (seed, framework paths)
+	// lists the registry.
+	if subject, ok := security.SubjectFromCtx(ctx); ok {
+		query.Where(seatNarrowing(subject.TenantID))
+	}
 	helper.WherePtr(query, utils.FromTimestamp(in.CreatedAtA), user.CreatedAtGTE)
 	helper.WherePtr(query, utils.FromTimestamp(in.CreatedAtZ), user.CreatedAtLTE)
 	helper.WherePtr(query, utils.FromTimestamp(in.UpdatedAtA), user.UpdatedAtGTE)
 	helper.WherePtr(query, utils.FromTimestamp(in.UpdatedAtZ), user.UpdatedAtLTE)
-	helper.Where(query, in.Email != nil, func() predicate.User { return user.EmailContainsFold(*in.Email) })
+	helper.Where(query, in.Account != nil, func() predicate.User { return user.AccountContainsFold(*in.Account) })
 	helper.Where(query, in.Enabled != nil, func() predicate.User { return user.EnabledEQ(*in.Enabled) })
 	helper.Where(query, in.DeptID != nil, func() predicate.User { return user.DeptIDEQ(*in.DeptID) })
 	helper.ApplyOrderBy(helper.ParseOrderBy(in.OrderBy), ent.Asc, ent.Desc, helper.FOMapping{
-		"email":     func(sel helper.SQLSelector) { query.Order(sel(user.FieldEmail)) },
+		"account":   func(sel helper.SQLSelector) { query.Order(sel(user.FieldAccount)) },
 		"createdAt": func(sel helper.SQLSelector) { query.Order(sel(user.FieldCreatedAt)) },
 		"updatedAt": func(sel helper.SQLSelector) { query.Order(sel(user.FieldUpdatedAt)) },
 	})
 
-	total, offset, limit, err := shared.Paginate(ctx, query, in.PageRequest, helper.DefaultPageSizeUnlimit)
+	total, offset, limit, err := helper.Paginate(ctx, query, in.PageRequest, helper.DefaultPageSizeUnlimit)
 	if err != nil {
 		return nil, rp.Platform.HandleEntError(err)
 	}
@@ -112,16 +129,66 @@ func (rp *userRP) List(ctx context.Context, in *UserListIn) (*UserListOut, error
 	if err != nil {
 		return nil, rp.Platform.HandleEntError(err)
 	}
-	return &UserListOut{
+	return &ListOut{
 		PageResponse: helper.BuildPageResponse(total, offset, limit),
 		List:         utils.SliceMap(us, mapUser),
 	}, nil
 }
 
-func (rp *userRP) FindByEmail(ctx context.Context, email string) (*User, error) {
-	d, err := rp.Platform.GetClient(ctx).User.Query().
-		Where(user.EmailEQ(email)).
-		Only(ctx)
+func (rp *userRP) ListByPopulation(ctx context.Context, in *ListIn) (*ListOut, error) {
+	query := rp.Platform.GetClient(ctx).User.Query()
+	if subject, ok := security.SubjectFromCtx(ctx); ok {
+		query.Where(populationNarrowing(subject.TenantID, utils.Deref(in.Population, "")))
+	}
+	helper.Where(query, in.Enabled != nil, func() predicate.User { return user.EnabledEQ(*in.Enabled) })
+	helper.Where(query, len(in.UserIDs) > 0, func() predicate.User { return user.IDIn(in.UserIDs...) })
+	helper.ApplyOrderBy(helper.ParseOrderBy(in.OrderBy), ent.Asc, ent.Desc, helper.FOMapping{
+		"account":   func(sel helper.SQLSelector) { query.Order(sel(user.FieldAccount)) },
+		"createdAt": func(sel helper.SQLSelector) { query.Order(sel(user.FieldCreatedAt)) },
+		"updatedAt": func(sel helper.SQLSelector) { query.Order(sel(user.FieldUpdatedAt)) },
+	})
+
+	total, offset, limit, err := helper.Paginate(ctx, query, in.PageRequest, helper.DefaultPageSizeUnlimit)
+	if err != nil {
+		return nil, rp.Platform.HandleEntError(err)
+	}
+	us, err := query.All(ctx)
+	if err != nil {
+		return nil, rp.Platform.HandleEntError(err)
+	}
+	out := &ListOut{
+		PageResponse: helper.BuildPageResponse(total, offset, limit),
+		List:         utils.SliceMap(us, mapUser),
+	}
+	rp.hydrateIdentity(ctx, out.List)
+	return out, nil
+}
+
+func (rp *userRP) ListCredentialsByUsers(ctx context.Context, userIDs []string) ([]*Credential, error) {
+	if len(userIDs) == 0 {
+		return nil, nil
+	}
+	rows, err := rp.Platform.GetClient(ctx).Credential.Query().
+		Where(credential.UserIDIn(userIDs...)).
+		All(ctx)
+	if err != nil {
+		return nil, rp.Platform.HandleEntError(err)
+	}
+	out := make([]*Credential, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, &Credential{Kind: row.Kind, Identifier: row.Identifier, UserID: row.UserID})
+	}
+	return out, nil
+}
+
+func (rp *userRP) FindByAccount(ctx context.Context, account string) (*User, error) {
+	// Registry-read lookup: the lift flag must ride the query execution
+	// too — the tenant interceptor fires at Only/All with the context it is
+	// handed.
+	globctx := security.RegistryRead(ctx)
+	d, err := rp.Platform.GetClient(globctx).User.Query().
+		Where(user.AccountEQ(account)).
+		Only(globctx)
 	if err != nil {
 		return nil, rp.Platform.HandleEntError(err)
 	}
@@ -134,6 +201,176 @@ func (rp *userRP) FindByID(ctx context.Context, id string) (*User, error) {
 		return nil, rp.Platform.HandleEntError(err)
 	}
 	return mapUser(d), nil
+}
+
+func (rp *userRP) FindSeated(ctx context.Context, id string) (*User, error) {
+	query := rp.Platform.GetClient(ctx).User.Query().Where(user.IDEQ(id))
+	if subject, ok := security.SubjectFromCtx(ctx); ok {
+		query.Where(seatNarrowing(subject.TenantID))
+	}
+	d, err := query.Only(ctx)
+	if err != nil {
+		return nil, rp.Platform.HandleEntError(err)
+	}
+	return mapUser(d), nil
+}
+
+func (rp *userRP) FindSeatedAnyPlane(ctx context.Context, id string) (*User, error) {
+	query := rp.Platform.GetClient(ctx).User.Query().Where(user.IDEQ(id))
+	if subject, ok := security.SubjectFromCtx(ctx); ok {
+		query.Where(tenantSeatNarrowing(subject.TenantID))
+	}
+	d, err := query.Only(ctx)
+	if err != nil {
+		return nil, rp.Platform.HandleEntError(err)
+	}
+	return mapUser(d), nil
+}
+
+func (rp *userRP) FindByIDs(ctx context.Context, ids []string) (map[string]*User, error) {
+	query := rp.Platform.GetClient(ctx).User.Query().Where(user.IDIn(ids...))
+	if subject, ok := security.SubjectFromCtx(ctx); ok {
+		// The batch face narrows to the caller's tenant like every other
+		// read face; cross-plane briefs stay readable within the tenant
+		// (member seats included — hydration consumers need them), and a
+		// foreign tenant's id answers as a silent miss.
+		query.Where(tenantSeatNarrowing(subject.TenantID))
+	}
+	rows, err := query.All(ctx)
+	if err != nil {
+		return nil, rp.Platform.HandleEntError(err)
+	}
+	byID := make(map[string]*User, len(rows))
+	for _, d := range rows {
+		byID[d.ID] = mapUser(d)
+	}
+	return byID, nil
+}
+
+func (rp *userRP) FindCredential(ctx context.Context, kind, identifier string) (*Credential, error) {
+	c, err := rp.Platform.GetClient(ctx).Credential.Query().
+		Where(credential.Kind(kind), credential.Identifier(identifier)).
+		Only(ctx)
+	if err != nil {
+		return nil, rp.Platform.HandleEntError(err)
+	}
+	return mapCredential(c), nil
+}
+
+func (rp *userRP) FindCredentialByIdentifier(ctx context.Context, identifier string) (*Credential, error) {
+	// The kind-agnostic twin: an identifier names its account whatever
+	// kind it bound through — the login path resolves, the proof paths
+	// (which know their kind) use the narrow one above. Identifier shapes
+	// across kinds do not collide (a phone is not an email is not an
+	// openid); a same-identifier pair across kinds is a data disease —
+	// logged loudly here, answered as a miss, so the login path keeps its
+	// timing-honest refusal instead of surfacing a 500.
+	c, err := rp.Platform.GetClient(ctx).Credential.Query().
+		Where(credential.Identifier(identifier)).
+		Only(ctx)
+	if err != nil {
+		var nse *ent.NotSingularError
+		if errors.As(err, &nse) {
+			rp.Log.Error("credential identifier collision across kinds", "identifier", identifier)
+			return nil, errorspb.ErrorInfraErrorDbNotFound("")
+		}
+		return nil, rp.Platform.HandleEntError(err)
+	}
+	return mapCredential(c), nil
+}
+
+func (rp *userRP) CreateCredential(ctx context.Context, c *Credential) error {
+	if _, err := rp.Platform.GetClient(ctx).Credential.Create().
+		SetKind(c.Kind).SetIdentifier(c.Identifier).SetUserID(c.UserID).
+		Save(ctx); err != nil {
+		return rp.Platform.HandleEntError(err)
+	}
+	return nil
+}
+
+func (rp *userRP) MoveCredential(ctx context.Context, kind, identifier, toUserID string) error {
+	// Zero matched rows is a visible miss (the credential vanished between
+	// the caller's read and this write), never a silent no-op.
+	n, err := rp.Platform.GetClient(ctx).Credential.Update().
+		Where(credential.Kind(kind), credential.Identifier(identifier)).
+		SetUserID(toUserID).
+		Save(ctx)
+	if err != nil {
+		return rp.Platform.HandleEntError(err)
+	}
+	if n == 0 {
+		return errorspb.ErrorInfraErrorDbNotFound("")
+	}
+	return nil
+}
+
+func (rp *userRP) DeleteCredential(ctx context.Context, kind, identifier, userID string) error {
+	// Scoped to the owner like the read that picked the row: a row that
+	// moved or vanished between read and delete answers as a visible miss
+	// (the MoveCredential law), never a silent no-op.
+	n, err := rp.Platform.GetClient(ctx).Credential.Delete().
+		Where(credential.Kind(kind), credential.Identifier(identifier), credential.UserID(userID)).
+		Exec(ctx)
+	if err != nil {
+		return rp.Platform.HandleEntError(err)
+	}
+	if n == 0 {
+		return errorspb.ErrorInfraErrorDbNotFound("")
+	}
+	return nil
+}
+
+func (rp *userRP) ListCredentialsByUser(ctx context.Context, userID string) ([]*Credential, error) {
+	rows, err := rp.Platform.GetClient(ctx).Credential.Query().
+		Where(credential.UserID(userID)).
+		Order(ent.Asc(credential.FieldKind), ent.Asc(credential.FieldIdentifier)).
+		All(ctx)
+	if err != nil {
+		return nil, rp.Platform.HandleEntError(err)
+	}
+	return utils.SliceMap(rows, mapCredential), nil
+}
+
+func (rp *userRP) CountCredentialsByUser(ctx context.Context, userID string) (int, error) {
+	n, err := rp.Platform.GetClient(ctx).Credential.Query().Where(credential.UserID(userID)).Count(ctx)
+	if err != nil {
+		return 0, rp.Platform.HandleEntError(err)
+	}
+	return n, nil
+}
+
+func (rp *userRP) DeleteCredentialsByUser(ctx context.Context, userID string) error {
+	if _, err := rp.Platform.GetClient(ctx).Credential.Delete().Where(credential.UserID(userID)).Exec(ctx); err != nil {
+		return rp.Platform.HandleEntError(err)
+	}
+	return nil
+}
+
+func (rp *userRP) EnsureSeat(ctx context.Context, seat *Seat) error {
+	// the unique index is the idempotence; a lost race is a no-op
+	if err := rp.Platform.GetClient(ctx).Membership.Create().
+		SetUserID(seat.UserID).SetTenantID(seat.TenantID).SetPopulation(seat.Population).
+		OnConflictColumns(membership.FieldUserID, membership.FieldTenantID, membership.FieldPopulation).
+		DoNothing().
+		Exec(ctx); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return rp.Platform.HandleEntError(err)
+	}
+	return nil
+}
+
+func (rp *userRP) DeleteSeatsByUser(ctx context.Context, userID string) error {
+	if _, err := rp.Platform.GetClient(ctx).Membership.Delete().Where(membership.UserID(userID)).Exec(ctx); err != nil {
+		return rp.Platform.HandleEntError(err)
+	}
+	return nil
+}
+
+func (rp *userRP) ListSeatsByUser(ctx context.Context, userID string) ([]*Seat, error) {
+	rows, err := rp.Platform.GetClient(ctx).Membership.Query().Where(membership.UserID(userID)).All(ctx)
+	if err != nil {
+		return nil, rp.Platform.HandleEntError(err)
+	}
+	return utils.SliceMap(rows, mapSeat), nil
 }
 
 func (rp *userRP) FindRoleIDsByCodes(ctx context.Context, codes []string) (map[string]string, error) {
@@ -149,6 +386,10 @@ func (rp *userRP) FindRoleIDsByCodes(ctx context.Context, codes []string) (map[s
 }
 
 func (rp *userRP) SetUserRoles(ctx context.Context, userID string, wanted []string) error {
+	// Diff-replace convergence: concurrent calls converge to the union of
+	// the two intents — accepted semantics: both writers are authorized
+	// admins, and a role survives removal only as another admin's
+	// explicit concurrent grant.
 	client := rp.Platform.GetClient(ctx)
 	stored, err := client.PrincipalRole.Query().Where(
 		principalrole.PrincipalType(shared.PrincipalTypeUser),
@@ -169,15 +410,14 @@ func (rp *userRP) SetUserRoles(ctx context.Context, userID string, wanted []stri
 		if _, ok := storedByID[id]; ok {
 			continue
 		}
-		if _, err := client.PrincipalRole.Create().
+		if err := client.PrincipalRole.Create().
 			SetPrincipalType(shared.PrincipalTypeUser).
 			SetPrincipalID(userID).
 			SetRoleID(id).
-			Save(ctx); err != nil {
-			// A racing writer won the unique; the binding exists either way.
-			if !ent.IsConstraintError(err) {
-				return rp.Platform.HandleEntError(err)
-			}
+			OnConflictColumns(principalrole.FieldPrincipalType, principalrole.FieldPrincipalID, principalrole.FieldRoleID).
+			DoNothing().
+			Exec(ctx); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return rp.Platform.HandleEntError(err)
 		}
 	}
 	for _, b := range stored {
@@ -247,16 +487,109 @@ func (rp *userRP) RevokeUserSessions(ctx context.Context, userID string) error {
 
 // Private -------------------------------------------------------------------------------------------------------------
 
+func (rp *userRP) hydrateIdentity(ctx context.Context, users []*User) {
+	// Folds the credential registry's two operator-facing facts onto a
+	// roster page: the masked phone of the sms credential and whether a
+	// wechat_mp credential exists. Absent credentials stay absent — a
+	// member without a phone bound shows no number, never an error.
+	if len(users) == 0 {
+		return
+	}
+	ids := make([]string, 0, len(users))
+	for _, u := range users {
+		ids = append(ids, u.ID)
+	}
+	creds, err := rp.ListCredentialsByUsers(ctx, ids)
+	if err != nil {
+		// Best-effort by design: the roster row is the truth this face
+		// owes; identity projections failing to load is a degraded read,
+		// not a failed one.
+		rp.Log.Warn("roster identity hydration failed", "err", err)
+		return
+	}
+	byUser := make(map[string][]*Credential, len(users))
+	for _, c := range creds {
+		byUser[c.UserID] = append(byUser[c.UserID], c)
+	}
+	for _, u := range users {
+		for _, c := range byUser[u.ID] {
+			switch c.Kind {
+			case rosterKindSMS:
+				masked := utils.MaskPhone(c.Identifier)
+				u.PhoneMasked = &masked
+			case rosterKindWechatMP:
+				u.WechatBound = true
+			}
+		}
+	}
+}
+
+func seatNarrowing(tenantID string) predicate.User {
+	return predicate.User(func(s *entsql.Selector) {
+		m := entsql.Table(membership.Table)
+		pops := entsql.Table(population.Table)
+		s.Where(entsql.Exists(entsql.Select(m.C(membership.FieldUserID)).From(m).Where(entsql.And(
+			entsql.EQ(m.C(membership.FieldTenantID), tenantID),
+			entsql.EQ(m.C(membership.FieldUserID), entsql.Raw(s.C(user.FieldID))),
+			entsql.NotIn(
+				m.C(membership.FieldPopulation),
+				entsql.Select(pops.C(population.FieldCode)).From(pops).Where(
+					entsql.EQ(pops.C(population.FieldPlane), security.PlaneMember),
+				),
+			),
+		))))
+	})
+}
+
+func populationNarrowing(tenantID, populationCode string) predicate.User {
+	return predicate.User(func(s *entsql.Selector) {
+		m := entsql.Table(membership.Table)
+		s.Where(entsql.Exists(entsql.Select(m.C(membership.FieldUserID)).From(m).Where(entsql.And(
+			entsql.EQ(m.C(membership.FieldTenantID), tenantID),
+			entsql.EQ(m.C(membership.FieldUserID), entsql.Raw(s.C(user.FieldID))),
+			entsql.EQ(m.C(membership.FieldPopulation), populationCode),
+		))))
+	})
+}
+
+func tenantSeatNarrowing(tenantID string) predicate.User {
+	// Tenant-only seat match — member plane included: governance writes
+	// reach every identity seated in the caller's tenant, while the plane
+	// filter stays a visibility law for list/get faces.
+	return predicate.User(func(s *entsql.Selector) {
+		m := entsql.Table(membership.Table)
+		s.Where(entsql.Exists(entsql.Select(m.C(membership.FieldUserID)).From(m).Where(entsql.And(
+			entsql.EQ(m.C(membership.FieldTenantID), tenantID),
+			entsql.EQ(m.C(membership.FieldUserID), entsql.Raw(s.C(user.FieldID))),
+		))))
+	})
+}
+
 func mapUser(d *ent.User) *User {
 	return &User{
 		ID:           d.ID,
 		CreatedAt:    d.CreatedAt,
 		UpdatedAt:    d.UpdatedAt,
-		TenantID:     d.TenantID,
 		DeptID:       d.DeptID,
 		Avatar:       d.Avatar,
-		Email:        &d.Email,
+		Account:      &d.Account,
 		PasswordHash: &d.PasswordHash,
 		Enabled:      d.Enabled,
+	}
+}
+
+func mapCredential(d *ent.Credential) *Credential {
+	return &Credential{
+		Kind:       d.Kind,
+		Identifier: d.Identifier,
+		UserID:     d.UserID,
+	}
+}
+
+func mapSeat(d *ent.Membership) *Seat {
+	return &Seat{
+		UserID:     d.UserID,
+		TenantID:   d.TenantID,
+		Population: d.Population,
 	}
 }

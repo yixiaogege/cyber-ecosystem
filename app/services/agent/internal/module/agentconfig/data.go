@@ -7,6 +7,8 @@ import (
 	"cyber-ecosystem/shared-go/helper"
 	"cyber-ecosystem/shared-go/utils"
 
+	errorspb "cyber-ecosystem/gen/go/cyber/shared/errors/v1"
+
 	"cyber-ecosystem/app/services/agent/internal/ent"
 	entagentconfig "cyber-ecosystem/app/services/agent/internal/ent/agentconfig"
 	"cyber-ecosystem/app/services/agent/internal/platform"
@@ -62,7 +64,7 @@ func (rp *agentConfigRP) DeleteByUserID(ctx context.Context, userID string) erro
 func (rp *agentConfigRP) List(ctx context.Context, in *ListIn) (*ListOut, error) {
 	query := rp.Platform.GetClient(ctx).AgentConfig.Query().
 		Order(ent.Desc(entagentconfig.FieldCreatedAt))
-	total, offset, limit, err := shared.Paginate(ctx, query, in.PageRequest, helper.DefaultPageSizeMax)
+	total, offset, limit, err := helper.Paginate(ctx, query, in.PageRequest, helper.DefaultPageSizeMax)
 	if err != nil {
 		return nil, rp.Platform.HandleEntError(err)
 	}
@@ -83,11 +85,12 @@ func (rp *agentConfigRP) FindSealedByUserID(ctx context.Context, userID string) 
 	d, err := rp.Platform.GetClient(ctx).AgentConfig.Query().
 		Where(entagentconfig.UserIDEQ(userID)).
 		Only(ctx)
-	if ent.IsNotFound(err) {
-		return nil, "", nil
-	}
 	if err != nil {
-		return nil, "", rp.Platform.HandleEntError(err)
+		err = rp.Platform.HandleEntError(err)
+		if !errorspb.IsInfraErrorDbNotFound(err) {
+			return nil, "", err
+		}
+		return nil, "", nil
 	}
 	return mapAgentConfig(d), d.APIKey, nil
 }

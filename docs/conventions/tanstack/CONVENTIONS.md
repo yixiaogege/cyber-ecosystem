@@ -2,10 +2,24 @@
 
 **Status:** ACTIVE
 
-> Rules here win over precedent in code when they conflict. Keep this file in
-> sync when a rule changes (see root AGENTS.md §7 and docs/README.md).
+> Rules here win over precedent in code when they conflict.
 
-Applies to web clients built on TanStack Start (`app/clients/*`).
+Applies to web clients built on TanStack Start (`app/clients/*`) and to the
+`shared-ts/**` capability packages (the client stack's shared home).
+
+## Read map
+
+| About to touch | Read first |
+|---|---|
+| `src/routes/**` | §3 |
+| `features/modules/<m>/page.tsx` | §1 transport shapes, §3 read-set, §5 UI/logic split |
+| `features/modules/<m>/ui/**`, flat module `.ts` logic | §5 |
+| `features/layout-*/**`, `features/login-*/**` | §2, §5 grammar, §8 route constants, §10 |
+| `messages/**` | §6 |
+| `domains/**` | §4, §9 |
+| `e2e/**` (playwright specs + helpers) | §11 |
+| `shared-ts/antd/src/skin-presets/**` | `docs/conventions/skin/CONVENTIONS.md` (own doc) |
+| anything else under `app/clients/*` or `shared-ts/**` | §1 layering, the touched layer's section, §9 for `shared-ts/<domain>/src/**`, §11 |
 
 ---
 
@@ -16,13 +30,21 @@ Applies to web clients built on TanStack Start (`app/clients/*`).
 | Route declaration | `src/routes/` | Only `createFileRoute` wiring — no components, no logic (§3) |
 | App shell utilities | `src/features/app/` | The base's generic subpath: shell screens, boundaries, shared helpers; may import domains (§7) |
 | Areas | `src/features/layout-<name>/`, `src/features/login-<name>/` | An area = one layout directory (the owner) + one login UI kit (§2) |
-| Formal pages | `src/features/modules/<route-name>/` | One directory per route, `page.tsx` entry |
+| Formal pages | `src/features/modules/<route-name>/` | One directory per route family — co-owned pages share it (`profile/`), entries stay `*-page.tsx` |
 | App-level components | `src/components/` | Self-contained only — no project-internal dependencies; depended on, never depending |
 | Domains | `src/domains/` | Admission-gated (§4) |
-| Infra | `src/stores/`, `src/services/`, `src/libs/` | As conventional — `libs` holds app-agnostic utilities (zero app semantics, import nothing app-internal) |
+| Infra | `src/stores/`, `src/services/`, `src/libs/` | As conventional — `libs` holds app-agnostic utilities (zero app semantics; local imports reach only siblings and paraglide) |
 
-Dependency direction: `routes → features → domains → services/stores/lib`.
-Features may import each other only along the area-pair direction (§2).
+Dependency direction: `routes → features → domains → services/stores/lib`. One
+recorded counter-flow: `services/connect` mounts `domains/error`'s `normalize`
+into the transport factory — the transport seam, and the sole exception the
+conformance guard enforces.
+Features may import each other only along the area-pair direction (§2), plus one
+hosting direction: a formal-page module (`features/modules/*`,
+`features/app/*`) imports its area's layout utilities — guard types, route
+context, `permissions`/`op`, area search stores — and base helpers. The
+layout never imports a module back; modules of different areas never import
+each other.
 
 **Transport responses are JSON-shaped, not message instances.** The connect
 transport (`services/connect/transport.ts`) re-serializes every unary
@@ -30,18 +52,24 @@ response through proto-es `toJson`: WKT wrappers arrive flattened to scalars,
 proto `map` fields as plain objects, enums as value-name strings. The
 generated TS types claim Message/Map shapes the runtime does not deliver —
 consume accordingly (`Object.entries` over maps, string/index access for
-enums).
+enums). protojson also drops zero-valued scalars: a row field consumed from a
+transport response narrows at the row (`row.count ?? 0`), never at the
+aggregate — an absent number and a present zero are the same wire fact and
+render the same honest value.
 
 **Server-streaming is consumed imperatively, outside the query cache.** The
 transport's stream entry takes a generated method descriptor (`*_pb.ts`) plus
 one `AbortController` per stream; a feature hook drives it directly and
-accumulates frames into component state (or a store interface the page
-injects — the chat hook takes a `ConversationStore` precisely so the backing
-impl can change without touching the hook). Frame intake normalizes protojson
-omissions (`frame.contentDelta ?? ""` — unset scalars are absent, not ""),
-and cancellation is the normal close: abort, drop the abort error, release
-the controller in `finally`; a controller map keyed by stream id guards
-against double-fire.
+accumulates frames into component state or a page-injected store interface.
+Frame intake normalizes protojson omissions (`frame.contentDelta ?? ""` —
+unset scalars are absent, not ""). Abort is the normal close: drop the abort
+error, release the controller in `finally`; a controller map keyed by stream
+id guards against double-fire.
+
+**Persisted store state is superjson-wrapped.** Cookie-persisted stores
+serialize through superjson (a `{"json":…}` envelope, `shared-ts/store`); a raw
+`JSON.parse` on the payload silently yields `undefined` — hydration goes through
+the store's own deserialize path, never a hand-rolled parse.
 
 ## 2) Area model
 
@@ -55,13 +83,12 @@ a layout directory plus a login UI kit:
   mutation hook, the assembled login page), and a root `area.ts` — the
   single source of the area's binding (namespace, paths, login route id).
   The layout mounts the area's UI-library provider itself. Stores live in
-  `src/stores/` under the single eager-registration barrel — load-bearing:
-  the defineStore registry drives server-side cookie collection, and a
-  late code-split registration would miss hydration. One store per file;
-  an area-scoped store carries the area namespace in directory, variable,
-  and cookie-key names (`dashboard-preferences/` →
-  `dashboardPreferencesStore` → `store_dashboard_preferences`) so sibling
-  layouts never collide.
+  `src/stores/` under the single eager-registration barrel (the registry
+  drives server-side cookie collection — a late code-split registration
+  misses hydration); one store per file; an area-scoped store carries the
+  area namespace in directory, variable, and cookie-key names
+  (`dashboard-preferences` → `dashboardPreferencesStore` →
+  `store_dashboard_preferences`) so sibling layouts never collide.
 - `features/login-<name>/` — a pure UI kit: `login-shell.tsx` (canvas +
   panel slots), `ui/` (form, brand pieces, stub affordances),
   `redirect.ts` (open-redirect hygiene, zero area knowledge). No layout
@@ -103,40 +130,38 @@ Three tiers:
    `staticData`, so deleting a route file removes its menu item
    automatically; drop the menu message keys alongside.
 
-**Page read-set contract.** Every formal-page route declares
-`staticData.operations` = the page's **read set** — the operations of every
-query the page actually issues for data. Menu visibility and route guards
-judge the **whole set**: all granted → page reachable; a page is never
-designed for partial-grant degradation. Mutations are not in the read set —
-an unauthorized action surfaces through the error domain (toast). The only
-touched surface is the route config; page code carries zero permission
-logic. Menu filtering reads session `permissions` (the session source of
-truth).
+**`staticData.title` is a typed message key** — `MessageKey` = `keyof typeof m`
+(`route-meta.ts`): the bare key literal is the only legal form; typos,
+template strings, and variables (type `string`) all fail typecheck. No
+constant table — the key set has no second source.
 
-**Tab identity (dashboard chrome).** A route owns a tabbar tab iff its
-`staticData` declares a `title`; title-less routes render inside the nearest
-titled ancestor's tab (the profile group pattern). `key` = resolved pathname
-(search excluded, one tab per param-route instance, e.g. each `/order/$id`
-id), `href` = full href including search, `pattern` = route `fullPath` kept
-for permission-filtered restore. Activation, close, and href capture compare
-the **exact key** derived from `tabFromMatches` — path-prefix ownership is
-forbidden (it once made the area root the fallback owner of every URL).
-Router `location` and `matches` are separate subscriptions that lag each
-other by a commit during navigations (location flips optimistically at
-navigation start); every tab decision derived from matches is gated behind
-`matchesAgreeWith(matches, pathname)` so torn frames can neither capture a
-foreign href nor re-append a just-closed tab. Session restore resolves
-`pattern` against the permission-filtered nav index; hidden routes
-(`menu.hide`) restore via their persisted title, but a pattern present in
-the unfiltered index is a permission-dropped visible route and stays closed.
-The active tab seeds through the same pattern rule, so a direct URL load
-lands in the bar even with no persisted record — the restore effect rebuilds
-membership after the append effect's mount run and must not drop it.
-The home tab is seeded only when a titled leaf exists at the area root —
-apps without a workbench start with an empty bar. Default post-login
-landing is `defaultLanding(permissions)` — the first permission-surviving
-leaf, never a hardcoded area root. Parameterized titles interpolate
-`match.params` (`compactParams`, `text(key, params)`).
+**Dot-named nesting.**
+
+- A dot-named route file (`login.wechat.callback.tsx`) is a child of each shorter prefix (`/login/wechat`, `/login`): every parent on that chain must be a layout route — its component renders `<Outlet />`, and the parent's own page lives in `login.index.tsx`.
+- A parent with a direct `component` never mounts the child while the child's `head` still applies — a correct SSR title over the parent's view is the drift symptom (right URL, parent's render), not a router bug.
+
+**Page read-set contract.**
+
+- Every formal-page route declares `staticData.operations` = the page's **read set** — the operations of every grant-gated query the page actually issues for data.
+- Builtin faces (`ACCESS_BUILTIN`) never enter a read set — authentication-guaranteed, the builtin chain never consults grants; a builtin member would make the page unreachable for every non-wildcard user (an upload probe's `ListUploadedParts` is the cautionary example).
+- Menu visibility and route guards judge the **whole set**: all granted → page reachable. A page is never designed for partial-grant degradation.
+- Mutations are not in the read set — an unauthorized action surfaces through the error domain (toast).
+- The only touched surface is the route config; page code carries zero permission logic. Menu filtering reads session `permissions` (the session source of truth).
+
+**Tab identity (dashboard chrome).**
+
+- A route owns a tabbar tab iff its `staticData` declares a `title`; title-less routes render inside the nearest titled ancestor's tab (the profile group pattern). A detail page joins its list's tab by nesting under the titled route as a `menu.hide` child with no `title` of its own (`head` carries the page title); the titled route is then a layout whose own page lives in `index.tsx` — a menu-bearing layout whose children are all deliberately hidden stays a leaf nav entry (children dropped for grants still prune it — hide-by-default holds).
+- `key` = resolved pathname (search excluded; one tab per param-route instance, e.g. each `/order/$id` id); `href` = full href including search; `pattern` = route `fullPath`, kept for permission-filtered restore. Activation, close, and href capture compare the **exact key** from `tabFromMatches` — path-prefix ownership is forbidden.
+- Router `location` and `matches` lag each other by one commit during navigations; every matches-derived tab decision gates behind `matchesAgreeWith(matches, pathname)` — torn frames can neither capture a foreign href nor re-append a just-closed tab.
+- Session restore resolves `pattern` against the permission-filtered nav index; hidden routes (`menu.hide`) restore via their persisted title; a pattern present only in the unfiltered index is a permission-dropped visible route and stays closed. The active tab seeds through the same pattern rule — a direct URL load lands in the bar even with no persisted record; the restore effect rebuilds membership after the append effect's mount run and must not drop it.
+- The home tab is seeded only when a titled leaf exists at the area root — apps without a workbench start with an empty bar. Default post-login landing is `defaultLanding(permissions)` — the first permission-surviving leaf, never a hardcoded area root. Parameterized titles interpolate `match.params` (`compactParams`, `text(key, params)`).
+
+### First-paint data (SSR)
+
+- Only queries **awaited in a route hook** (`beforeLoad`/`loader`) reach the dehydrated state. A `useQuery` fired during the SSR render races the stream close, never dehydrates, and the client refetches — the first paint flips. A surface whose visuals depend on the session (dual-state pages) or on page data (content tabs) resolves that data in a route hook, never by render-time `useQuery` alone.
+- A session-consuming client resolves the session probe once at the root route's `beforeLoad`, failure swallowed — the probe never blocks the shell. Guards and pages then read the warm cache.
+- Loader prefetch rides the transport factory's static-keyed `connectTransport` singleton; a `createTransport()` instance mints a unique cache key per reference and silently splits the cache across server and client.
+- A query that embeds mutable state (the session probe embeds the profile) is invalidated by its write seam — every successful write to the embedded state invalidates the owning query.
 
 ## 4) Domains admission
 
@@ -167,9 +192,10 @@ transport the app actually uses.
 
 ## 5) Component file discipline
 
-- **One React component per `.tsx` file** (Fast Refresh boundaries are
-  files; co-located components widen every hot-reload blast radius). Helper
-  components get their own file and an `export`.
+- **One exported React component per `.tsx` file** (Fast Refresh boundaries
+  are files; co-located exports widen every hot-reload blast radius). A
+  page's private, non-exported sub-components may live in the page file;
+  any component another module imports gets its own file and an `export`.
 - **Exported component name = file name** in PascalCase
   (`tabbar.tsx` → `Tabbar`, no legacy area prefixes).
 - **UI/logic separation** — a formal-page module splits three ways:
@@ -183,6 +209,10 @@ transport the app actually uses.
   are allowed with a reasoned `biome-ignore noComponentHookFactories`:
   route options evaluate once at module scope, so component identity is
   stable.
+- **Render-path state reads go through state, never a ref.** React Compiler
+  caches render output — a render that dereferences a ref renders that ref's
+  stale value until an unrelated re-render (ghost state). Refs are read in
+  effects, callbacks, and event handlers only.
 
 **Naming grammar** (directories are `role-variant` (`layout-dashboard`);
 entry components follow component-name=file-name (`DashboardLayout` in
@@ -206,6 +236,16 @@ nested subpaths per the ≥4-graduation rule below).
 - Prop types are named `<Component>Props` — never `IProps`.
 - Same-family files share a kebab prefix; the prefix is the future
   subdirectory name (a family of ≥4 files graduates to a subdirectory).
+
+**Tailwind v4 vocabulary law** (pinned by live regressions): Tailwind v4
+prefers its native vocabulary over arbitrary values where one exists —
+scale steps (`gap-2.75`, not `gap-[11px]`) and standing palette/token
+classes (`bg-gray-500/18`, not `bg-[rgba(107,114,128,0.18)]`). Where no
+native form exists (font sizes, gradients, shadows, `clamp()`), the
+arbitrary value is the canonical form — do not mint theme variables to
+avoid it. Container-query variants keep their bracket forms.
+
+**Skin presets** (`shared-ts/antd/src/skin-presets/**`) are business-agnostic and low-frequency — they have their own doc: `docs/conventions/skin/CONVENTIONS.md`.
 
 ## 6) i18n ownership
 
@@ -233,44 +273,52 @@ render vocabulary → status vocabulary → `act_` → empty states.
 
 - `messages/common/`, `messages/error/`, `messages/not-found/` — base-owned
   (keep these lean: only what the shell renders). `messages/error/` mixes
-  two key families by design: STATUS titles (`error_<word>_title`,
+  three key families by design: STATUS titles (`error_<word>_title`,
   lowercase) and the reason vocabulary mapped 1:1 from proto reasons
-  (SCREAMING, e.g. `error_GENERAL_ERROR_INTERNAL`) — one directory, one
-  semantic domain.
+  (SCREAMING, e.g. `error_GENERAL_ERROR_INTERNAL`), plus the error pages'
+  own chrome labels (`error_home`) — one directory, one semantic domain.
 - `messages/<module>/` — owned by a formal module.
 - `messages/layout-<name>/`, `messages/login-<name>/` — owned by an area;
   deleted with it.
 
 Adding a message directory requires registering it in
-`project.inlang/settings.json` `pathPattern` (explicit list — globs are not
-supported). After renaming/moving/deleting keys, force regeneration
-(`rm -rf src/paraglide`, rebuild) and grep the output: the build may skip
-regeneration, and it does not type-check message references — typecheck
-does, and it is the guard that catches stale key references (including
-`staticData` title strings typed as `NoParamMessageKey`).
+`project.inlang/settings.json` `pathPattern` (explicit list — no globs).
+After renaming/moving/deleting keys, force regeneration (`rm -rf
+src/paraglide`, rebuild) and verify: the build may skip regeneration, and
+compiled files are named **lowercased id + numeric dedup suffix**
+(`error_SYSTEM_TENANT_DISABLED` → `error_system_tenant_disabled20.js`), so an
+exact-case grep of the output is always a false negative. The build does not
+type-check message references — typecheck does, and it is the guard that
+catches stale key references (including `staticData` titles typed as
+`NoParamMessageKey`).
 
 Adding a locale is a three-point registration: the `locales` array in
 `project.inlang/settings.json` (the `{locale}` pathPattern entries pick the
 files up automatically), the antd/dayjs entry in `src/domains/antd/locale.ts`,
 and a native-name match arm in `common_locale_name` (the fallback prints the
-raw tag). Every directory needs a complete file per locale before the
-parity check (key order, key set, `{placeholder}` set against the base
-locale) passes.
+raw tag). Every directory needs a complete file per locale, with key
+order, key set, and `{placeholder}` set kept identical against the base
+locale — verified by hand whenever locale files change (no gate owns
+this yet).
 
 ## 7) features/app (base utilities home)
 
-Two resident kinds:
+Four resident directories:
 
-- **Presentation stubs** (`notfound-page`, `pending-fallback`): zero
-  project-internal imports. Data comes in as props, behavior as function
-  props, composition as ReactNode slots — wiring happens at the usage
-  site (`__root.tsx` is the composition root). Framework/infrastructure
-  imports (react, tanstack, sonner, paraglide, `shared-*`) do not count
-  as external.
-- **Base wiring screens and boundaries** (`error-page`, `error-fallback`,
-  `base-error-boundary`): render through the error engine's `view`
-  directly — no resolve-injection ceremony; catchers pass only
-  `{error, onRetry?}`.
+- **`error/`** — the error-engine faces: `error-page` (brand-screen full
+  page), `error-fallback` (single-scale embedded row), `base-error-boundary`
+  (route-scoped boundary) render through the error engine's `view` directly —
+  no resolve-injection ceremony; catchers pass only `{error, onRetry?}`.
+  `notfound-page` is the brand-screen sibling — props-only, zero
+  project-internal imports.
+- **`feedback/`** — `feedback-sonner` (toast wiring) and `pending-fallback`
+  (the uncertainty pair's live half): presentation stubs — props-only,
+  zero project-internal imports. Framework/infrastructure imports (react,
+  tanstack, sonner, paraglide, `shared-*`) do not count as internal.
+- **`file/`** — the upload surface (`put-url.ts` XHR direct PUT, presign
+  confirm, `use-file-url` id gating, the proxy/upload hooks).
+- **`user/`** — identity display utilities (directory hydration,
+  deleted-tag, user-ref).
 
 App-agnostic utilities with zero app semantics (`channel`,
 `form-validator`) live in `src/libs/` (§1), not here. Error fallback
@@ -280,7 +328,15 @@ Shared data hooks follow the batching discipline: a page-batching hook
 (one call per visible list, e.g. avatar URLs) keys its query on a
 sorted-unique signature, not array identity; when the payload is a
 time-limited URL, `staleTime` stays under the server TTL so a cached entry
-never outlives its signature.
+never outlives its signature. A singular URL hook (one object's URL,
+`use-file-url.ts`) gates on id presence before hydrating — an absent id is
+render state, not a fetch error.
+
+**Browser direct uploads PUT through XHR** (`put-url.ts`), never fetch:
+upload progress rides `xhr.upload`, and the ETag header multipart confirm
+needs is only readable through a CORS-exposed XHR response. `Content-Type`
+is declared client-side — the presign does not sign it and the backend
+stores the header verbatim.
 
 ## 8) Typed route constants
 
@@ -317,56 +373,32 @@ call `view(error)` internally and branch only on `silent`; catchers pass
 
 UI surfaces split by scale:
 
-- **Base full page** (`features/app/error/error-page`): the brand-screen sibling
-  of NotFoundPage — same deep-space canvas, rose reserved as the error
-  semantics' only seat. The hero numeral is the envelope's wire `http`
-  (kind-profile default when local); silent words render a quiet page
-  without error chrome. Wired only at `__root`'s `errorComponent`.
-- **Base embedded** (`features/app/error/error-fallback`): single-scale,
-  zero-skin — one row (badge + title + optional retry link) on the
-  currentColor ladder, zero motion; pairs with `pending-fallback` as the
-  uncertainty pair (halted/live halves), style-neutral so any area can
-  host them. Silent words collapse to a neutral inline state. Recovery is
-  the catcher's business: `onRetry` is injected by the wiring layer,
-  never defaulted. Height: the pair fills its mount slot — `size-full`
-  where the host height is definite, `grow` where it is a flex column;
-  slots that center them supply one of the two (the content-area
-  watermark wrapper is a flex column, the root slot a min-h-svh rail).
-- **Base component-level** (`features/app/error/base-error-boundary`):
-  react-error-boundary with `resetKeys=[leafRouteId]` — TanStack Router
-  swaps outlet children without remounting the boundary, so without a
-  route-scoped reset key a rendered fallback sticks across navigation.
-  Component boundaries also shield downstream route `errorComponent`s:
-  child loader errors without their own errorComponent rethrow through
-  the outlet and land on the nearest boundary, not the route error page.
-- **Area level** (inside the layout): areas own no error UI of their own.
-  Route-level catchers mount the base `error-fallback` directly;
-  component boundaries mount `base-error-boundary` directly. A layout
-  route's `errorComponent` renders in place of the whole layout (no
-  provider, no chrome) — the style-neutral fallbacks survive that bare
-  context by design, which is one reason area-dialect error faces stay
-  out.
+- **Base full page** (`features/app/error/error-page`): the brand-screen sibling of NotFoundPage — same deep-space canvas, rose reserved as the error semantics' only seat. Hero numeral = the envelope's wire `http`; silent words render a quiet page without error chrome. Wired only at `__root`'s `errorComponent`.
+- **Base embedded** (`features/app/error/error-fallback`): single-scale, zero-skin — one row (badge + title + optional retry link) on the currentColor ladder, zero motion; pairs with `pending-fallback` as the uncertainty pair (halted/live halves), style-neutral so any area can host them. Silent words collapse to a neutral inline state. Recovery is the catcher's business: `onRetry` injected by the wiring layer, never defaulted. Height: the pair fills its mount slot — `size-full` where host height is definite, `grow` where it is a flex column; centering slots supply one of the two.
+- **Base component-level** (`features/app/error/base-error-boundary`): react-error-boundary with `resetKeys=[leafRouteId]` — the router swaps outlet children without remounting the boundary, so without a route-scoped reset key a rendered fallback sticks across navigation. Component boundaries also shield downstream route `errorComponent`s: child loader errors without their own errorComponent rethrow through the outlet to the nearest boundary.
+- **Area level**: areas own no error UI of their own — route catchers mount the base `error-fallback`, component boundaries mount `base-error-boundary`. A layout route's `errorComponent` renders in place of the whole layout (no provider, no chrome) — the style-neutral fallbacks survive that bare context by design.
 
-Verified behavior: SSR first paint of route errors renders server-side
-with locale-correct copy; across the server-fn boundary connect's native
-error JSON reconstructs a real `ConnectError` client-side, but every
-other thrown value resolves as data (the boundary rethrows only
-`instanceof Error`) — so server fns return status values instead of
-throwing envelopes. Telemetry groups by `[kind, reason]` so error storms
-aggregate into one issue. Route error recovery needs
-`router.invalidate()` — the boundary's `reset` alone never re-runs
-loaders.
+Verified behavior (pinned laws, not observations):
+
+- SSR first paint of route errors renders server-side with locale-correct copy.
+- Across the server-fn boundary: connect's native error JSON reconstructs a real `ConnectError` client-side; every other thrown value resolves as data (the boundary rethrows only `instanceof Error`) — so server fns return status values instead of throwing envelopes.
+- A verdict's discriminant crossing the server-fn boundary is a **string tag, never a boolean**: the framed serialization delivers booleans as truthy strings — a `{ok:false}` payload reads as success client-side (observed live: a rejected login took the success branch with the rejection reason riding along unexamined).
+- Telemetry groups by `[kind, reason]` — error storms aggregate into one issue.
+- Route error recovery needs `router.invalidate()` — the boundary's `reset` alone never re-runs loaders.
 
 Session-flow navigations (kick mirror, self-kick, logout, expired-param
 strip) pass `viewTransition: false`: the View Transitions API skips the
-**entire commit** in a hidden document (spec InvalidStateError), which
-strands a background kick on the old page — a stranded kick then only
-recovers via focus-refetch, which `staleTime` can suppress inside its
-window. Any other hidden-tab transition abort is normalized to the
-silent `canceled` word by the domain's view-transition source adapter.
-Every session exit — guard redirect, watcher kick, and deliberate logout
-alike — hands the current href to the login page as `?redirect=` so
-re-login returns to the origin.
+**entire commit** in a hidden document (spec InvalidStateError), stranding a
+background kick on the old page — its only recovery is focus-refetch, which
+`staleTime` can suppress. Any other hidden-tab transition abort normalizes
+to the silent `canceled` word. Every session exit — guard redirect, watcher
+kick, deliberate logout — hands the current href to the login page as
+`?redirect=` so re-login returns to the origin.
+
+View-transition geometry is percentage-based, never px (px resolves against
+the snapshot containing block and drifts); DOM mutations in transition
+callbacks flush with `flushSync` before capture; morphing frames get
+`transition: none` — the three recurring VT bugs.
 
 An unreachable backend is a session verdict, not an auth one: the
 session fn returns `unreachable` on `network`-kind failures, the guard
@@ -383,14 +415,63 @@ directional offsets. Translatable text that changes length per locale needs
 
 ## 11) Verification
 
-Per change: `admin:typecheck`, `admin:check`, `admin:build` — all with
+Per change: for each client under `app/clients/*` affected by the change,
+its `<client>:typecheck`, `<client>:check`, `<client>:build` — all with
 `--skip-nx-cache`, all exit codes checked. Order matters after route or
 message edits: **build first** (regenerates `routeTree.gen.ts` and
 paraglide output), then typecheck (build alone does not type-check message
-or route-tree references). Regenerating those outputs does not dirty the
-source files that import them, so tsc's incremental cache (`*.tsbuildinfo`)
-skips them and reports stale greens — delete the tsbuildinfo before the
-typecheck that follows a regeneration.
+or route-tree references). The clients run tsc without `incremental` — there
+is no `*.tsbuildinfo` to go stale; every typecheck is a full check. The
+stale-green risk lives one level up, in the Nx task cache — hence
+`--skip-nx-cache` on every gate leg.
+
+**Testability is a component-design constraint.** A component's logic runs through props and injected interfaces (a page injects its store interface, never an ambient singleton) — what jsdom cannot fake is a layering leak, not a fixture problem.
+
+**Spec first — the web face of kratos §7.** A slice's logic face — the flat module-root `.ts` files (§5: search schemas, row types/builders, domain models) — is written test-first: the vitest table beside the file lands before the module body fills in, one row per planned behavior plus the client's counterexample rows (empty state, zero-valued row fields, a 404-shaped error envelope). UI components stay design-for-test; their proof is the browser loop. The table never aligns to the code — changing a case is a review ruling, never a local edit to make a test pass. A failing `fc.assert` run reports its seed — replay it verbatim before touching anything.
+
+**Tests have two homes** (the web face of kratos §7): unit tests run in
+vitest, colocated as `<file>.test.ts(x)` beside their source — jsdom carries
+the cookie jar and DOM seams, `@testing-library` drives rendered components,
+every package with a `test` target runs `vitest run`; end-to-end tests run in
+`@playwright/test`, ONLY in a client's `e2e/` directory with its own
+`playwright.config.ts` booting the dev server on a dedicated port via
+`webServer` — an explicit `<client>:e2e` target outside the regular chain
+(the web counterpart of ENT_E2E). A fresh environment installs browser
+binaries once — a manual user-plane step (`playwright install`); artifacts
+(`test-results/`,
+`playwright-report/`) stay out of git and out of biome. The config and the
+spec files belong in the client's tsconfig include — a file outside the
+include is outside the type gate, and the editor's inferred-project fallback
+is the only thing that will ever tell you. The playwright suite is the
+automatable half of the reachable-surface rule below; the browser loop stays
+the finishing pass.
+
+**A cold-load interaction waits on hydration.** The
+dev server serves the client graph asynchronously — an interaction fired
+before hydration is a lost event (React then resets the controlled value),
+and a loader-prefetched face paints its SSR rows into the document, so
+rendered rows prove nothing about hydration either. Two observable shapes,
+one per face: an input-bearing face waits on React's value tracker
+(`_valueTracker` on the input); an input-less face arms `waitForRequest` on
+the face's loader RPC before navigating (a request fired mid-load is
+invisible to a later-armed waiter) and awaits it after the goto, before
+any interaction. Assert-only visits need neither — locator assertions
+retry on their own.
+
+**A suite whose legs walk the real backend stack closes serial.** Parallel
+workers share one dev server and one fixture store; alone-red failures
+that re-adjudicate green solo are the harness's false-positive family —
+cold-start hydration races, real-stack legs contending over the one dev
+server, a re-navigation over a hydrated document aborted by the dev stack
+itself. Parallel is the iteration form; `--workers=1` is the closing
+evidence. That re-navigation is retry-shaped on its own account: gate on
+`domcontentloaded` with the first assertion inside `expect(…).toPass()`,
+never on `load`.
+
+**A fidelity anchor migrates with its face.** When a lawfully changed face
+(copy, layout, state) leaves an anchored expectation red, re-anchoring is
+the changing slice's closing duty — a red anchor is a stale contract or a
+regression, never a fixture to tolerate.
 
 **Behavioral review for library seams** (typecheck cannot see these — they
 are the recurring bug class): whenever code wires into, migrates between,
@@ -399,8 +480,7 @@ toasts), enumerate the library's observable contract next to our
 implementation and check each pair — semantics, axis, direction, ordering,
 identity. Adapters that survive a runtime migration (e.g. HTML5 DnD →
 dnd-kit) are the classic hiding place: the old semantics only agrees with
-the new contract in one direction. Pure model functions at these seams get
-unit tests pinning the semantics (`tab-session.test.ts` is the pattern).
+the new contract in one direction.
 
 **Reachable-surface rule**: any behavior change on a surface reachable
 without login (login page, guard redirects, SSR entry) gets e2e-verified
@@ -409,3 +489,13 @@ self-contained script installed before the event (a from-document-start
 MutationObserver for one-shot notices), never with after-the-fact polling.
 Auth-only surfaces (tabbar interactions, chrome) carry an explicit
 user-verification list in the change report instead.
+
+**Close.** A change is done when three faces agree: chain green, spec green,
+browser loop. Surface-facing changes close with the loop — responsive
+viewports, zero console errors; without a browser-automation tool connected,
+a manual developer walkthrough is the degraded form, declared as such. The
+report declares what ran and what was observed, with evidence
+("proven by: chain green; spec green N/N table cases; browser loop clean at 2 viewports, zero console errors").
+Absorbing a reviewed slice adds the mechanical checks: deleted tokens/keys
+grepped for remaining consumers, new utility classes traced to their token
+source, the integration diff equal to the absorbed slice's file set.

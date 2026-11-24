@@ -7,7 +7,6 @@ import (
 
 	"cyber-ecosystem/shared-go/capability/storage"
 
-	"cyber-ecosystem/app/services/system/internal/ent"
 	"cyber-ecosystem/app/services/system/internal/ent/schema/local_mixins"
 	"cyber-ecosystem/app/services/system/internal/module/file"
 	"cyber-ecosystem/app/services/system/internal/platform"
@@ -42,7 +41,7 @@ func (rp *filePresignRP) Create(ctx context.Context, f *file.File) (*file.File, 
 	if err != nil {
 		return nil, rp.Platform.HandleEntError(err)
 	}
-	return mapFile(created), nil
+	return file.MapFile(created), nil
 }
 
 func (rp *filePresignRP) MarkConfirmed(ctx context.Context, id string, size int64, contentType, etag string) (*file.File, error) {
@@ -55,7 +54,16 @@ func (rp *filePresignRP) MarkConfirmed(ctx context.Context, id string, size int6
 	if err != nil {
 		return nil, rp.Platform.HandleEntError(err)
 	}
-	return mapFile(updated), nil
+	return file.MapFile(updated), nil
+}
+
+func (rp *filePresignRP) SetUploadID(ctx context.Context, id, uploadID string) error {
+	if err := rp.Platform.GetClient(ctx).File.UpdateOneID(id).
+		SetUploadID(uploadID).
+		Exec(ctx); err != nil {
+		return rp.Platform.HandleEntError(err)
+	}
+	return nil
 }
 
 func (rp *filePresignRP) Delete(ctx context.Context, id string) error {
@@ -72,15 +80,15 @@ func (rp *filePresignRP) FindByID(ctx context.Context, id string) (*file.File, e
 	if err != nil {
 		return nil, rp.Platform.HandleEntError(err)
 	}
-	return mapFile(d), nil
+	return file.MapFile(d), nil
 }
 
 func (rp *filePresignRP) Limits() storage.Limits {
-	return rp.Platform.GetStorage().Limits()
+	return rp.Platform.GetStorageLimits()
 }
 
 func (rp *filePresignRP) PresignUpload(ctx context.Context, key string, size int64, ttl time.Duration) (string, error) {
-	url, err := rp.Platform.GetStorage().Presign.PresignUpload(ctx, key, size, ttl)
+	url, err := rp.Platform.GetStorageFor(ctx).Presign.PresignUpload(ctx, key, size, ttl)
 	if err != nil {
 		return "", rp.Platform.HandleStorageError(err)
 	}
@@ -88,7 +96,7 @@ func (rp *filePresignRP) PresignUpload(ctx context.Context, key string, size int
 }
 
 func (rp *filePresignRP) PresignUploadPart(ctx context.Context, key, uploadID string, partNum int32, ttl time.Duration) (string, error) {
-	url, err := rp.Platform.GetStorage().Presign.PresignUploadPart(ctx, key, uploadID, partNum, ttl)
+	url, err := rp.Platform.GetStorageFor(ctx).Presign.PresignUploadPart(ctx, key, uploadID, partNum, ttl)
 	if err != nil {
 		return "", rp.Platform.HandleStorageError(err)
 	}
@@ -96,7 +104,7 @@ func (rp *filePresignRP) PresignUploadPart(ctx context.Context, key, uploadID st
 }
 
 func (rp *filePresignRP) CreateMultipart(ctx context.Context, key, contentType string) (string, error) {
-	uploadID, err := rp.Platform.GetStorage().Multipart.Create(ctx, key, contentType)
+	uploadID, err := rp.Platform.GetStorageFor(ctx).Multipart.Create(ctx, key, contentType)
 	if err != nil {
 		return "", rp.Platform.HandleStorageError(err)
 	}
@@ -104,7 +112,7 @@ func (rp *filePresignRP) CreateMultipart(ctx context.Context, key, contentType s
 }
 
 func (rp *filePresignRP) ListParts(ctx context.Context, key, uploadID string) ([]storage.CompletedPart, error) {
-	parts, err := rp.Platform.GetStorage().Multipart.ListParts(ctx, key, uploadID)
+	parts, err := rp.Platform.GetStorageFor(ctx).Multipart.ListParts(ctx, key, uploadID)
 	if err != nil {
 		return nil, rp.Platform.HandleStorageError(err)
 	}
@@ -112,21 +120,21 @@ func (rp *filePresignRP) ListParts(ctx context.Context, key, uploadID string) ([
 }
 
 func (rp *filePresignRP) CompleteMultipart(ctx context.Context, key, uploadID string, parts []storage.CompletedPart) error {
-	if _, err := rp.Platform.GetStorage().Multipart.Complete(ctx, key, uploadID, parts); err != nil {
+	if _, err := rp.Platform.GetStorageFor(ctx).Multipart.Complete(ctx, key, uploadID, parts); err != nil {
 		return rp.Platform.HandleStorageError(err)
 	}
 	return nil
 }
 
 func (rp *filePresignRP) AbortMultipart(ctx context.Context, key, uploadID string) error {
-	if err := rp.Platform.GetStorage().Multipart.Abort(ctx, key, uploadID); err != nil {
+	if err := rp.Platform.GetStorageFor(ctx).Multipart.Abort(ctx, key, uploadID); err != nil {
 		return rp.Platform.HandleStorageError(err)
 	}
 	return nil
 }
 
 func (rp *filePresignRP) Stat(ctx context.Context, key string) (*storage.ObjectInfo, error) {
-	obj, err := rp.Platform.GetStorage().Object.Stat(ctx, key)
+	obj, err := rp.Platform.GetStorageFor(ctx).Object.Stat(ctx, key)
 	if err != nil {
 		return nil, rp.Platform.HandleStorageError(err)
 	}
@@ -134,28 +142,10 @@ func (rp *filePresignRP) Stat(ctx context.Context, key string) (*storage.ObjectI
 }
 
 func (rp *filePresignRP) DeleteObject(ctx context.Context, key string) error {
-	if err := rp.Platform.GetStorage().Object.Delete(ctx, key); err != nil {
+	if err := rp.Platform.GetStorageFor(ctx).Object.Delete(ctx, key); err != nil {
 		return rp.Platform.HandleStorageError(err)
 	}
 	return nil
 }
 
 // Private -------------------------------------------------------------------------------------------------------------
-
-func mapFile(d *ent.File) *file.File {
-	return &file.File{
-		ID:          d.ID,
-		CreatedAt:   d.CreatedAt,
-		UpdatedAt:   d.UpdatedAt,
-		TenantID:    d.TenantID,
-		Key:         d.Key,
-		Name:        d.Name,
-		ContentType: d.ContentType,
-		Size:        d.Size,
-		Source:      d.Source,
-		Status:      d.Status,
-		UploadID:    d.UploadID,
-		ETag:        d.Etag,
-		OwnerID:     d.OwnerID,
-	}
-}

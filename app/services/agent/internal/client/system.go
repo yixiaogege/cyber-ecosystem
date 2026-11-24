@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	connectrpc "connectrpc.com/connect"
 
@@ -17,7 +18,6 @@ import (
 
 	"cyber-ecosystem/app/services/agent/internal/conf"
 	"cyber-ecosystem/app/services/agent/internal/module/agentconfig"
-	"cyber-ecosystem/app/services/agent/internal/shared"
 )
 
 // Adapter -------------------------------------------------------------------------------------------------------------
@@ -32,7 +32,7 @@ func NewSystemClient(c *conf.Remote, logger *slog.Logger) (*systemClient, func()
 	conn, err := connect.DialInsecure(context.Background(),
 		connect.WithEndpoint(c.GetSystemConnect()),
 		connect.WithMiddleware(standardMiddleware(logger)...),
-		connect.WithInterceptors(sessionCookieInterceptor()),
+		connect.WithInterceptors(connect.SessionCookieInterceptor()),
 	)
 	if err != nil {
 		return nil, nil, err
@@ -45,23 +45,35 @@ func NewSystemClient(c *conf.Remote, logger *slog.Logger) (*systemClient, func()
 	}, cleanup, nil
 }
 
+const (
+	verifyTimeout  = 300 * time.Millisecond // a hung engine fails fast here, not at the inbound server ceiling
+	checkTimeout   = 300 * time.Millisecond // fail-closed ceiling for a hung engine
+	hydrateTimeout = 500 * time.Millisecond // degradable: a timeout renders absent fields, never a failed row
+)
+
 // Method --------------------------------------------------------------------------------------------------------------
 
 func (c *systemClient) AuthenticateSession(ctx context.Context, token string) (*security.Subject, error) {
-	resp, err := c.introspect.VerifySession(withSessionToken(ctx, token), connectrpc.NewRequest(&systempb.VerifySessionRequest{}))
+	ctx, cancel := context.WithTimeout(ctx, verifyTimeout)
+	defer cancel()
+	resp, err := c.introspect.VerifySession(connect.WithSessionToken(ctx, token), connectrpc.NewRequest(&systempb.VerifySessionRequest{}))
 	if err != nil {
 		return nil, err
 	}
 	return &security.Subject{
-		UserID:    utils.Deref(utils.Unwrap[string](resp.Msg.GetUserId()), ""),
-		TenantID:  utils.Deref(utils.Unwrap[string](resp.Msg.GetTenantId()), ""),
-		SessionID: utils.Deref(utils.Unwrap[string](resp.Msg.GetSessionId()), ""),
-		Extra:     map[string]any{shared.ExtraEmail: utils.Deref(utils.Unwrap[string](resp.Msg.GetEmail()), "")},
+		UserID:     utils.Deref(utils.Unwrap[string](resp.Msg.GetUserId()), ""),
+		TenantID:   utils.Deref(utils.Unwrap[string](resp.Msg.GetTenantId()), ""),
+		Population: utils.Deref(utils.Unwrap[string](resp.Msg.GetPopulation()), ""),
+		Plane:      utils.Deref(utils.Unwrap[string](resp.Msg.GetPlane()), ""),
+		SessionID:  utils.Deref(utils.Unwrap[string](resp.Msg.GetSessionId()), ""),
+		Extra:      map[string]any{security.ExtraAccount: utils.Deref(utils.Unwrap[string](resp.Msg.GetAccount()), "")},
 	}, nil
 }
 
 func (c *systemClient) CheckGrants(ctx context.Context, subject *security.Subject, operation string) (*kauthz.Decision, error) {
-	resp, err := c.introspect.CheckOperation(withSessionToken(ctx, subject.SessionID), connectrpc.NewRequest(&systempb.CheckOperationRequest{Operation: operation}))
+	ctx, cancel := context.WithTimeout(ctx, checkTimeout)
+	defer cancel()
+	resp, err := c.introspect.CheckOperation(connect.WithSessionToken(ctx, subject.SessionID), connectrpc.NewRequest(&systempb.CheckOperationRequest{Operation: operation}))
 	if err != nil {
 		return nil, err
 	}
@@ -71,10 +83,10 @@ func (c *systemClient) CheckGrants(ctx context.Context, subject *security.Subjec
 func (c *systemClient) Hydrate(ctx context.Context, ids []string) map[string]*agentconfig.UserBrief {
 	briefs := make(map[string]*agentconfig.UserBrief, len(ids))
 	subject, ok := security.SubjectFromCtx(ctx)
-	if !ok {
+	if !ok || len(ids) == 0 {
 		return briefs
 	}
-	decision, err := c.CheckGrants(ctx, subject, systemv1connect.UserServiceGetUserProcedure)
+	decision, err := c.CheckGrants(ctx, subject, systemv1connect.UserServiceBatchGetUsersProcedure)
 	if err != nil {
 		c.log.Warn("hydration eligibility degraded", "error", err)
 		return briefs
@@ -83,44 +95,23 @@ func (c *systemClient) Hydrate(ctx context.Context, ids []string) map[string]*ag
 		c.log.Debug("hydration skipped: viewer ungranted")
 		return briefs
 	}
-	for _, id := range ids {
-		resp, err := c.users.GetUser(withSessionToken(ctx, subject.SessionID), connectrpc.NewRequest(&systempb.GetUserRequest{Id: id}))
-		if err != nil {
-			if errorspb.IsGeneralErrorPermissionDenied(err) {
-				c.log.Debug("user hydration skipped: viewer ungranted", "user_id", id)
-			} else {
-				c.log.Warn("user hydration degraded", "user_id", id, "error", err)
-			}
-			continue
+	ctx, cancel := context.WithTimeout(ctx, hydrateTimeout)
+	defer cancel()
+	resp, err := c.users.BatchGetUsers(connect.WithSessionToken(ctx, subject.SessionID), connectrpc.NewRequest(&systempb.BatchGetUsersRequest{Ids: ids}))
+	if err != nil {
+		if errorspb.IsGeneralErrorPermissionDenied(err) {
+			c.log.Debug("user hydration skipped: viewer ungranted")
+		} else {
+			c.log.Warn("user hydration degraded", "error", err)
 		}
-		u := resp.Msg.GetUser()
-		if u == nil {
-			continue
-		}
+		return briefs
+	}
+	for id, u := range resp.Msg.GetUsers() {
 		briefs[id] = &agentconfig.UserBrief{
-			ID:     utils.Deref(utils.Unwrap[string](u.GetId()), ""),
-			Email:  utils.Unwrap[string](u.GetEmail()),
-			Avatar: utils.Unwrap[string](u.GetAvatar()),
+			ID:      utils.Deref(utils.Unwrap[string](u.GetId()), ""),
+			Account: utils.Unwrap[string](u.GetAccount()),
+			Avatar:  utils.Unwrap[string](u.GetAvatar()),
 		}
 	}
 	return briefs
-}
-
-// Private -------------------------------------------------------------------------------------------------------------
-
-type sessionTokenKey struct{}
-
-func withSessionToken(ctx context.Context, token string) context.Context {
-	return context.WithValue(ctx, sessionTokenKey{}, token)
-}
-
-func sessionCookieInterceptor() connectrpc.Interceptor {
-	return connectrpc.UnaryInterceptorFunc(func(next connectrpc.UnaryFunc) connectrpc.UnaryFunc {
-		return func(ctx context.Context, req connectrpc.AnyRequest) (connectrpc.AnyResponse, error) {
-			if token, ok := ctx.Value(sessionTokenKey{}).(string); ok && token != "" {
-				req.Header().Set("Cookie", "session_token="+token)
-			}
-			return next(ctx, req)
-		}
-	})
 }

@@ -8,8 +8,8 @@ import (
 	"cyber-ecosystem/app/services/system/internal/shared"
 )
 
-// 事件词表：聚合口径的唯一来源。C 端上报的 event_name 必须落在这里，否则不计入任何部件。
 const (
+	// 事件词表：聚合口径的唯一来源。C 端上报的 event_name 必须落在这里，否则不计入任何部件。
 	EventRegister         = "register"
 	EventLogin            = "login"
 	EventEnterTest        = "enter_test"
@@ -22,17 +22,17 @@ const (
 	EventMemberActivate   = "member_activate"
 )
 
-// 指标卡 / 漏斗 / 质量 的键：前端据此选 i18n 模板，服务端只给键与数值。
 const (
+	// 指标卡 / 漏斗 / 质量 的键：前端据此选 i18n 模板，服务端只给键与数值。
 	MetricRegister = "register"
 	MetricTest     = "test"
 	MetricActive   = "active"
 	MetricPay      = "pay"
 
-	SubDeltaPrev  = "delta_prev"  // 与上一等长窗相比的百分比增减
+	SubDeltaPrev  = "delta_prev"   // 与上一等长窗相比的百分比增减
 	SubAvgPerUser = "avg_per_user" // 人均次数
-	SubPeak       = "peak"        // 窗口内单日最高（Note = 窗口天数）
-	SubManual     = "manual"      // 其中手动开通数
+	SubPeak       = "peak"         // 窗口内单日最高（Note = 窗口天数）
+	SubManual     = "manual"       // 其中手动开通数
 
 	DrillUserList   = "user_list"
 	DrillTestRecord = "test_record"
@@ -43,8 +43,8 @@ const (
 	QualityRetention7 = "retention_7d"
 )
 
-// funnelStages 是 C 端行为漏斗的有序阶段，键与事件名同源。
 var funnelStages = []string{
+	// C 端行为漏斗的有序阶段，键与事件名同源。
 	EventCompleteTest,
 	EventReportView,
 	EventReportCenterView,
@@ -52,8 +52,7 @@ var funnelStages = []string{
 	EventMemberActivate,
 }
 
-// qualityKeys 与 qualityRates 的取值顺序一一对应。
-var qualityKeys = []string{QualityTestRate, QualityPayRate, QualityRetention7}
+var qualityKeys = []string{QualityTestRate, QualityPayRate, QualityRetention7} // 取值顺序与 groupRates 一一对应
 
 const (
 	topInviterLimit = 5
@@ -65,7 +64,6 @@ const (
 	qualityLagDays    = 7
 )
 
-// Window 统计时间窗，驱动指标卡、漏斗、裂变与最近动态。
 type Window int
 
 const (
@@ -85,7 +83,6 @@ func (w Window) Days() int {
 	}
 }
 
-// Granularity 趋势聚合粒度。
 type Granularity int
 
 const (
@@ -168,27 +165,23 @@ type Trend struct {
 	CompletedTests []int64
 }
 
-// DailyRollup 是 platform_analytics 的一行日汇总。
 type DailyRollup struct {
 	Date             time.Time
 	NewRegistrations int64
 	CompletedTests   int64
 }
 
-// ReferralStats 是窗口内的邀请关系总量：新增关系数、去重邀请人数、被邀人完成过测评数。
 type ReferralStats struct {
 	NewReferrals int64
 	Inviters     int64
 	Converted    int64
 }
 
-// LevelCount 是某一裂变层级的被邀人数。
 type LevelCount struct {
 	Level int32
 	Count int64
 }
 
-// GroupQuality 是一个人群（被邀 / 自然）在窗口内的规模与三项质量计数。
 type GroupQuality struct {
 	Total     int64
 	Tested    int64
@@ -196,8 +189,8 @@ type GroupQuality struct {
 	Retained7 int64
 }
 
-// QualityCounts 按「是否被邀」分组，[0] = 被邀，[1] = 自然。
 type QualityCounts struct {
+	// 按「是否被邀」分组，[0] = 被邀，[1] = 自然。
 	Invited *GroupQuality
 	Organic *GroupQuality
 }
@@ -222,19 +215,22 @@ type DashboardRP interface {
 type DashboardUC struct {
 	shared.UC
 	dashboardRP DashboardRP
+	clock       shared.Clock
 }
 
 func NewDashboardUC(logger *slog.Logger, tm shared.Transaction, dashboardRP DashboardRP) *DashboardUC {
 	return &DashboardUC{
 		UC:          shared.NewUC(logger.With("module", "module/dashboard"), tm),
 		dashboardRP: dashboardRP,
+		clock:       time.Now,
 	}
 }
 
 // Method --------------------------------------------------------------------------------------------------------------
 
 func (uc *DashboardUC) Overview(ctx context.Context, w Window) (*Overview, error) {
-	from, to := window(w)
+	now := uc.clock()
+	from, to := window(now, w)
 	prevFrom := from.AddDate(0, 0, -w.Days())
 
 	counts, err := uc.dashboardRP.EventCounts(ctx, from, to)
@@ -291,9 +287,9 @@ func (uc *DashboardUC) Overview(ctx context.Context, w Window) (*Overview, error
 	}, nil
 }
 
-// Trend 只受粒度影响，与时间窗无关：周 = 近 12 周，月 = 近 12 个月，年 = 近 3 年。
 func (uc *DashboardUC) Trend(ctx context.Context, g Granularity) (*Trend, error) {
-	from, to, points := trendRange(time.Now(), g)
+	// 趋势只受粒度影响，与时间窗无关：周 = 近 12 周，月 = 近 12 个月，年 = 近 3 年。
+	from, to, points := trendRange(uc.clock(), g)
 	rows, err := uc.dashboardRP.DailyRollups(ctx, from, to)
 	if err != nil {
 		return nil, err
@@ -319,9 +315,9 @@ func (uc *DashboardUC) Trend(ctx context.Context, g Granularity) (*Trend, error)
 
 // Private -------------------------------------------------------------------------------------------------------------
 
-// window 把时间窗换算成 [from, to) 的绝对区间，日切按本机时区。
-func window(w Window) (from, to time.Time) {
-	today := startOfDay(time.Now())
+func window(now time.Time, w Window) (from, to time.Time) {
+	// 换算成 [from, to) 的绝对区间，日切按本机时区。
+	today := startOfDay(now)
 	return today.AddDate(0, 0, -(w.Days() - 1)), today.AddDate(0, 0, 1)
 }
 
@@ -383,10 +379,10 @@ func (uc *DashboardUC) viral(ctx context.Context, from, to time.Time, active int
 	}, nil
 }
 
-// quality 用固定同期窗而非请求时间窗：manage 的「被邀 vs 自然」是同期质量快照，
-// 且 7 日留存要求队列注册满 7 天，所以窗口取 [今天-97 天, 今天-7 天)。
 func (uc *DashboardUC) quality(ctx context.Context) ([]*QualityRow, error) {
-	to := startOfDay(time.Now()).AddDate(0, 0, -qualityLagDays)
+	// 固定同期窗而非请求时间窗：manage 的「被邀 vs 自然」是同期质量快照，
+	// 且 7 日留存要求队列注册满 7 天，所以窗口取 [今天-97 天, 今天-7 天)。
+	to := startOfDay(uc.clock()).AddDate(0, 0, -qualityLagDays)
 	from := to.AddDate(0, 0, -qualityWindowDays)
 	counts, err := uc.dashboardRP.QualityCounts(ctx, from, to)
 	if err != nil {
@@ -406,8 +402,8 @@ func (uc *DashboardUC) quality(ctx context.Context) ([]*QualityRow, error) {
 	return rows, nil
 }
 
-// groupRates 返回三项比率（完成测评率 / 付费率 / 7 日留存），顺序与 qualityKeys 一致。
 func groupRates(g *GroupQuality) [3]float64 {
+	// 三项比率（完成测评率 / 付费率 / 7 日留存），顺序与 qualityKeys 一致。
 	if g == nil || g.Total == 0 {
 		return [3]float64{}
 	}
@@ -434,8 +430,8 @@ func trendRange(now time.Time, g Granularity) (from, to time.Time, points int) {
 	}
 }
 
-// trendBuckets 生成与粒度对齐的桶起点序列；无数据的桶由调用方补零。
 func trendBuckets(from time.Time, g Granularity, points int) []time.Time {
+	// 与粒度对齐的桶起点序列；无数据的桶由调用方补零。
 	out := make([]time.Time, 0, points)
 	for i := 0; i < points; i++ {
 		switch g {
@@ -480,8 +476,8 @@ func startOfMonth(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, t.Location())
 }
 
-// startOfWeek 取周一零点：与 postgres date_trunc('week', ...) 的 ISO 周一致。
 func startOfWeek(t time.Time) time.Time {
+	// 取周一零点：与 postgres date_trunc('week', ...) 的 ISO 周一致。
 	day := startOfDay(t)
 	offset := (int(day.Weekday()) + 6) % 7
 	return day.AddDate(0, 0, -offset)
@@ -498,24 +494,24 @@ func dayCount(w Window) string {
 	}
 }
 
-// deltaPercent 是与上一等长窗相比的百分比增减；无基期（上一窗为 0）时返回空，前端不渲染副标签。
 func deltaPercent(cur, prev int64) *float64 {
+	// 无基期（上一窗为 0）时返回空，前端不渲染副标签。
 	if prev == 0 {
 		return nil
 	}
 	return float64Ptr(float64(cur-prev) / float64(prev) * 100)
 }
 
-// percent 以 first 为分母的占比；分母为 0 时返回 0。
 func percent(v, first int64) float64 {
+	// 分母为 0 时返回 0。
 	if first == 0 {
 		return 0
 	}
 	return float64(v) / float64(first) * 100
 }
 
-// ratio 比值；分母为 0 时返回空，与「无数据」和「比值 0」区分开。
 func ratio(v, base int64) *float64 {
+	// 分母为 0 时返回空，与「无数据」和「比值 0」区分开。
 	if base == 0 {
 		return nil
 	}

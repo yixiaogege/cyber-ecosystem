@@ -15,12 +15,12 @@ import (
 	"cyber-ecosystem/app/services/system/internal/shared"
 )
 
-// 聚合口径全部落在这一层。这些查询是 GROUP BY / COUNT(DISTINCT) / FILTER (WHERE) /
-// 递归 CTE，ent 的查询构造器表达不了（层级上溯的递归 CTE 尤其），所以统一走
-// sql/execquery 的裸 SQL：只绑定占位符，不使用字符串拼接的用户输入。
-// 三张表都用普通 tenant_id 列（没有 subject 派生的租户拦截器），因此每个查询都把
-// 租户显式作为 $1 传入。
 const (
+	// 聚合口径全部落在这一层。这些查询是 GROUP BY / COUNT(DISTINCT) / FILTER (WHERE) /
+	// 递归 CTE，ent 的查询构造器表达不了（层级上溯的递归 CTE 尤其），所以统一走
+	// sql/execquery 的裸 SQL：只绑定占位符，不使用字符串拼接的用户输入。
+	// 三张表都用普通 tenant_id 列（没有 subject 派生的租户拦截器），因此每个查询都把
+	// 租户显式作为 $1 传入。
 	qEventCounts = `
 SELECT event_name, COUNT(*) AS count
 FROM event_log
@@ -344,9 +344,9 @@ func tenant(ctx context.Context) string {
 	return security.TenantFromCtx(ctx)
 }
 
-// placeholders 生成从 start 开始的 n 个占位符，如 placeholders(3, 2) → "$3, $4"。
-// 只插入占位符本身，取值仍然全部绑定。
 func placeholders(start, n int) string {
+	// 生成从 start 开始的 n 个占位符，如 placeholders(3, 2) → "$3, $4"。
+	// 只插入占位符本身，取值仍然全部绑定。
 	out := make([]string, 0, n)
 	for i := 0; i < n; i++ {
 		out = append(out, fmt.Sprintf("$%d", start+i))

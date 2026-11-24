@@ -1,0 +1,16 @@
+pre-commit:
+  parallel: true
+  commands:
+    nx-fmt:
+      run: node .nx/nxw.js run tools:go:fmt && node .nx/nxw.js affected -t check --base HEAD
+    docs-gate:
+      run: node .nx/nxw.js run docs:check
+    gen-guard:
+      run: node tools/scripts/gen-guard.mjs
+    ledger-guard:
+      run: node tools/scripts/ledger-guard.mjs
+
+pre-push:
+  commands:
+    gates:
+      run: node .nx/nxw.js run tools:gates:push

@@ -8,7 +8,9 @@ option go_package = "cyber-ecosystem/gen/go/cyber/system/v1";
 
 // business errors (service-level): domain-specific failures the
 // service layer returns actively, distinct from the generic codes in
-// cyber/shared/errors (General/Flow/Infra). The 6xxx range is reserved for service-level business reasons.
+// cyber/shared/errors (General/Flow/Infra). The 6xxx range is reserved
+// for service-level business reasons; system holds 600x-610x, and the
+// next free block for a new service starts at 62xx.
 enum System {
   option (.errors.default_code) = 400;
 
@@ -16,7 +18,28 @@ enum System {
 
   // 600x: auth
   SYSTEM_LOGIN_FAILED = 6000 [(.errors.code) = 400];
+  // No seat in the target population: a true refusal — this identity has
+  // no standing here, a different account is the answer.
+  SYSTEM_LOGIN_SEAT_REQUIRED = 6002 [(.errors.code) = 400];
+  // Multiple seats, none chosen: guidance, not refusal — the client
+  // should offer the seat choice, not an error dead-end.
+  SYSTEM_LOGIN_SEAT_CHOICE_REQUIRED = 6008 [(.errors.code) = 400];
+  SYSTEM_IDENTITY_PROVIDER_UNKNOWN = 6003 [(.errors.code) = 400];
+  SYSTEM_IDENTITY_EXCHANGE_FAILED = 6004 [(.errors.code) = 401];
+  SYSTEM_IDENTITY_ALREADY_BOUND = 6005 [(.errors.code) = 409];
+  // Unbind addressed a kind this account never bound — a stale face or a
+  // foreign spelling, answered as a miss rather than a silent no-op.
+  SYSTEM_IDENTITY_NOT_BOUND = 6009 [(.errors.code) = 404];
+  // One code for every send-budget dimension (window, per-phone daily,
+  // per-source): the refusal deliberately names no dimension, because the
+  // copy a client renders is a budget-structure oracle otherwise.
+  SYSTEM_SMS_RATE_LIMITED = 6006 [(.errors.code) = 429];
+  SYSTEM_SMS_CODE_INVALID = 6007 [(.errors.code) = 401];
   SYSTEM_PASSWORD_MISMATCH = 6001 [(.errors.code) = 400];
+  // Unbinding this credential would leave the account with no login path
+  // (no other credential bound, no password set) — the lockout guard.
+  // Auth family overflow at 6016: the 600x decade is full.
+  SYSTEM_LAST_LOGIN_METHOD = 6016 [(.errors.code) = 400];
 
   // 601x: dept
   SYSTEM_DEPT_SELF_PARENT = 6010 [(.errors.code) = 400];
@@ -36,17 +59,29 @@ enum System {
   SYSTEM_POLICY_UNKNOWN_KIND = 6040 [(.errors.code) = 400];
   SYSTEM_POLICY_INVALID_PARAMS = 6041 [(.errors.code) = 400];
   SYSTEM_POLICY_NOT_FOUND = 6042 [(.errors.code) = 404];
-  // 605x: apikey (provision cleared 2026-09-29; number stays reserved)
-  reserved 6050;
+  // 605x: password
+  SYSTEM_PASSWORD_POLICY = 6050 [(.errors.code) = 400];
   // 606x: authz runtime
   SYSTEM_AUTHZ_POLICY_DENIED = 6060 [(.errors.code) = 403];
   // 607x: user
   SYSTEM_USER_SELF_DELETE = 6070 [(.errors.code) = 400];
   SYSTEM_USER_SELF_DISABLE = 6071 [(.errors.code) = 400];
   SYSTEM_USER_DISABLED = 6072 [(.errors.code) = 403];
+  SYSTEM_USER_NOT_FOUND = 6073 [(.errors.code) = 404];
   // 608x: file
   SYSTEM_FILE_NOT_FOUND = 6080 [(.errors.code) = 404];
   SYSTEM_FILE_TOO_LARGE = 6081 [(.errors.code) = 400];
   SYSTEM_FILE_SIZE_MISMATCH = 6082 [(.errors.code) = 400];
   SYSTEM_FILE_INVALID_STATE = 6083 [(.errors.code) = 400];
+
+  // 609x: tenant registry
+  SYSTEM_TENANT_DISABLED = 6090 [(.errors.code) = 403];
+  SYSTEM_TENANT_NOT_FOUND = 6091 [(.errors.code) = 404];
+  SYSTEM_TENANT_PROTECTED = 6092 [(.errors.code) = 400];
+  // A taken code is burned forever — reuse would graft the new tenant onto
+  // the old one's seats and history.
+  SYSTEM_TENANT_CODE_TAKEN = 6093 [(.errors.code) = 409];
+
+  // 610x: population registry
+  SYSTEM_POPULATION_NOT_FOUND = 6101 [(.errors.code) = 404];
 }

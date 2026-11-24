@@ -49,17 +49,17 @@ export function ViralKpi({ viral }: Readonly<{ viral: Viral }>) {
     },
   ];
   return (
-    <div className="grid grid-cols-4 divide-x divide-line-soft border-line border-b">
+    <div className="divide-line-soft border-line grid grid-cols-4 divide-x border-b">
       {cells.map((cell) => (
         <div className="px-4 py-3" key={cell.key}>
-          <div className="text-[11.5px] text-ink-tertiary">{cell.label}</div>
-          <div className="mt-0.5 font-black text-[23px] text-ink tabular-nums">
+          <div className="text-ink-tertiary text-[11.5px]">{cell.label}</div>
+          <div className="text-ink mt-0.5 text-[23px] font-black tabular-nums">
             {cell.value}
             {cell.small ? (
-              <small className="ml-1 font-semibold text-ink-secondary text-xs">{cell.small}</small>
+              <small className="text-ink-secondary ml-1 text-xs font-semibold">{cell.small}</small>
             ) : null}
           </div>
-          <div className="mt-0.5 text-[10.5px] text-ink-tertiary leading-normal">{cell.note}</div>
+          <div className="text-ink-tertiary mt-0.5 text-[10.5px] leading-normal">{cell.note}</div>
         </div>
       ))}
     </div>
@@ -71,7 +71,7 @@ export function ViralLevels({ viral }: Readonly<{ viral: readonly FissionLevelVi
   const max = Math.max(1, ...levels.map((l) => l.count));
   return (
     <div className="flex flex-col gap-2 px-4 pt-2 pb-3">
-      <div className={`${RANK_ROW} border-line border-b pb-1 text-[10.5px] text-ink-tertiary`}>
+      <div className={`${RANK_ROW} border-line text-ink-tertiary border-b pb-1 text-[10.5px]`}>
         <span>{m.dashboard_overview_level_col()}</span>
         <span />
         <span className="text-right">{m.dashboard_overview_level_col_count()}</span>
@@ -79,8 +79,8 @@ export function ViralLevels({ viral }: Readonly<{ viral: readonly FissionLevelVi
       </div>
       {levels.map((level, i) => (
         <div className={RANK_ROW} key={level.label}>
-          <span className="whitespace-nowrap text-ink-secondary">{level.label}</span>
-          <span className="h-2.5 overflow-hidden rounded-[5px] bg-fill-tertiary">
+          <span className="text-ink-secondary whitespace-nowrap">{level.label}</span>
+          <span className="bg-fill-tertiary h-2.5 overflow-hidden rounded-[5px]">
             <span
               className="block h-full rounded-[5px]"
               style={{
@@ -89,10 +89,10 @@ export function ViralLevels({ viral }: Readonly<{ viral: readonly FissionLevelVi
               }}
             />
           </span>
-          <span className="text-right font-bold text-ink-secondary tabular-nums">
+          <span className="text-ink-secondary text-right font-bold tabular-nums">
             {fmt(level.count)}
           </span>
-          <span className="text-right text-ink-tertiary tabular-nums">{pct(level.share)}</span>
+          <span className="text-ink-tertiary text-right tabular-nums">{pct(level.share)}</span>
         </div>
       ))}
     </div>

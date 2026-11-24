@@ -55,8 +55,8 @@ export function DiagPage() {
         value: u.id ?? "",
         label: (
           <span className="flex items-center gap-2">
-            <span>{u.email?.split("@")[0]}</span>
-            <span className="font-mono text-[12px] text-ink-tertiary">{u.email}</span>
+            <span>{u.account?.split("@")[0]}</span>
+            <span className="text-ink-tertiary font-mono text-[12px]">{u.account}</span>
             {(u.roles ?? []).length === 0 && (
               <Typography.Text className="text-[12px]" type="secondary">
                 {m.system_users_unassigned()}
@@ -64,7 +64,7 @@ export function DiagPage() {
             )}
           </span>
         ),
-        search: u.email ?? "",
+        search: u.account ?? "",
       })),
     [usersQuery.data],
   );
@@ -125,7 +125,7 @@ export function DiagPage() {
       <Card>
         <div className="flex flex-col gap-4 lg:flex-row">
           <div className="flex flex-1 flex-col gap-1">
-            <span className="font-medium text-[13px]">{m.system_diag_subject()}</span>
+            <span className="text-[13px] font-medium">{m.system_diag_subject()}</span>
             <Select
               aria-label={m.system_diag_subject()}
               className="w-full"
@@ -140,7 +140,7 @@ export function DiagPage() {
             />
           </div>
           <div className="flex flex-1 flex-col gap-1">
-            <span className="font-medium text-[13px]">{m.system_diag_operation()}</span>
+            <span className="text-[13px] font-medium">{m.system_diag_operation()}</span>
             <OperationSelect
               catalog={catalogQuery.data?.list ?? []}
               onChange={(next) => {
@@ -190,7 +190,11 @@ export function DiagPage() {
         )}
         {session.data?.status === "authed" && (
           <Card>
-            <SessionPanel email={session.data.user.email} permissions={session.data.permissions} />
+            <SessionPanel
+              account={session.data.user.account}
+              memberships={session.data.memberships}
+              permissions={session.data.permissions}
+            />
           </Card>
         )}
       </div>

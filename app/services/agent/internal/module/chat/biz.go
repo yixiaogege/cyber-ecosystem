@@ -30,7 +30,7 @@ import (
 
 const (
 	maxHistoryTurns = 48     // replayed-context turn cap: coherent multi-turn follow-ups without unbounded request size
-	maxHistoryChars = 24_000 // ≈6k replayed tokens (4 bytes ≈ 1 token heuristic); the S4 harness swaps this for error-adaptive shrinking
+	maxHistoryChars = 24_000 // ≈6k replayed tokens (4 bytes ≈ 1 token heuristic)
 )
 
 type modelsResp struct {
@@ -121,8 +121,8 @@ type ChatUC struct {
 }
 
 func NewChatUC(logger *slog.Logger, tm shared.Transaction, c *conf.Crypto, agentConfigRP agentconfig.AgentConfigRP, chatRP ChatRP) (*ChatUC, error) {
-	if c == nil || c.GetMasterKey() == "" {
-		return nil, fmt.Errorf("crypto.master_key is required")
+	if c == nil || len(c.GetMasterKey()) < shared.MinMasterKeyBytes {
+		return nil, fmt.Errorf("crypto.master_key is required (min %d bytes)", shared.MinMasterKeyBytes)
 	}
 	return &ChatUC{
 		UC:        shared.NewUC(logger.With("module", "module/chat"), tm),
@@ -257,7 +257,7 @@ func (uc *ChatUC) ListModels(ctx context.Context) ([]string, error) {
 	if apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 	}
-	resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
+	resp, err := newGuardedHTTPClient(5*time.Second, modelsBodyCap).Do(req)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
@@ -312,11 +312,13 @@ func (uc *ChatUC) Stream(ctx context.Context, model string, turns []*Turn, emit 
 		return "", err
 	}
 	// Per-request construction: base_url is per-user, so there is no shared
-	// pool to reuse; stream lifetime is bounded by ctx, not by a client timeout.
+	// pool to reuse; the guarded client carries no timeout — stream lifetime
+	// stays bounded by ctx, and the outbound law matches ListModels.
 	cm, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
-		BaseURL: baseURL,
-		APIKey:  apiKey,
-		Model:   model,
+		BaseURL:    baseURL,
+		APIKey:     apiKey,
+		Model:      model,
+		HTTPClient: newGuardedHTTPClient(0, streamBodyCap),
 	})
 	if err != nil {
 		return "", mapUpstreamErr(err)

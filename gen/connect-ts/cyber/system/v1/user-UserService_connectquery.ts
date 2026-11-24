@@ -20,11 +20,6 @@ export const updateUser = UserService.method.updateUser;
 export const updateUserStatus = UserService.method.updateUserStatus;
 
 /**
- * @generated from rpc cyber.system.v1.UserService.ChangePassword
- */
-export const changePassword = UserService.method.changePassword;
-
-/**
  * @generated from rpc cyber.system.v1.UserService.DeleteUser
  */
 export const deleteUser = UserService.method.deleteUser;
@@ -38,3 +33,13 @@ export const listUsers = UserService.method.listUsers;
  * @generated from rpc cyber.system.v1.UserService.GetUser
  */
 export const getUser = UserService.method.getUser;
+
+/**
+ * @generated from rpc cyber.system.v1.UserService.BatchGetUsers
+ */
+export const batchGetUsers = UserService.method.batchGetUsers;
+
+/**
+ * @generated from rpc cyber.system.v1.UserService.ListUsersByPopulation
+ */
+export const listUsersByPopulation = UserService.method.listUsersByPopulation;

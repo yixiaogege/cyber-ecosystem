@@ -1,12 +1,12 @@
 ---
 name: kratos-new-module
-description: Domain module creation — use when creating a kratos module/<d>/ four-file set or a new ent schema in app/services/*.
+description: Domain module creation — use when creating a kratos module/<d>/ four-file set or a new ent schema in app/services/*. Trigger phrases include aggregate root, new table, new entity.
 ---
 
 # New domain module (aggregate root)
 
-Procedure: `docs/conventions/kratos/CONVENTIONS.md §7` "Adding a new domain module" — follow it exactly through schema, migrations, wiring, and build. Step 6 carries the wire-pruning trap; read it before wiring anything startup-shaped.
+Read first: the read map in `docs/conventions/kratos/CONVENTIONS.md` — the `module/<d>/**` and `ent/schema/**` rows.
 
-Rules in force: §1 (layering & module-dependency paradigm), §2 (naming), §3 (file structure & ordering), §4 (comment discipline), §5 (layer specifics).
+Procedure: `docs/conventions/kratos/RUNBOOKS.md` §1 "New domain module" — the steps exactly. Trap inside the wire step: wire prunes unconsumed providers — anything startup-shaped must hang off a live dependency chain (a `newApp` param or HookRegistry self-registration).
 
-Finish with §7 "Pre-completion self-check" before reporting done.
+Verify per kratos CONVENTIONS §7: the generation chain green, the migration applied, one live RPC probe including the refused path; close with the evidence declaration.

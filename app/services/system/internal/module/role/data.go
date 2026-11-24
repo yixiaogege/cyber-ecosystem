@@ -2,6 +2,8 @@ package role
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"log/slog"
 	"slices"
 
@@ -95,7 +97,7 @@ func (rp *roleRP) Delete(ctx context.Context, id string) (string, error) {
 	return id, nil
 }
 
-func (rp *roleRP) List(ctx context.Context, in *RoleListIn) (*RoleListOut, error) {
+func (rp *roleRP) List(ctx context.Context, in *ListIn) (*ListOut, error) {
 	query := rp.Platform.GetClient(ctx).Role.Query()
 	helper.Where(query, in.Code != nil, func() predicate.Role { return role.CodeContainsFold(*in.Code) })
 	helper.Where(query, in.Name != nil, func() predicate.Role { return role.NameContainsFold(*in.Name) })
@@ -105,7 +107,7 @@ func (rp *roleRP) List(ctx context.Context, in *RoleListIn) (*RoleListOut, error
 		"createdAt": func(sel helper.SQLSelector) { query.Order(sel(role.FieldCreatedAt)) },
 		"updatedAt": func(sel helper.SQLSelector) { query.Order(sel(role.FieldUpdatedAt)) },
 	})
-	total, offset, limit, err := shared.Paginate(ctx, query, in.PageRequest, helper.DefaultPageSizeUnlimit)
+	total, offset, limit, err := helper.Paginate(ctx, query, in.PageRequest, helper.DefaultPageSizeUnlimit)
 	if err != nil {
 		return nil, rp.Platform.HandleEntError(err)
 	}
@@ -113,7 +115,7 @@ func (rp *roleRP) List(ctx context.Context, in *RoleListIn) (*RoleListOut, error
 	if err != nil {
 		return nil, rp.Platform.HandleEntError(err)
 	}
-	out := &RoleListOut{
+	out := &ListOut{
 		PageResponse: helper.BuildPageResponse(total, offset, limit),
 		List:         utils.SliceMap(rs, mapRole),
 	}
@@ -173,6 +175,11 @@ func (rp *roleRP) ListByPrincipal(ctx context.Context, principalType, principalI
 }
 
 func (rp *roleRP) ReplaceGrants(ctx context.Context, roleID string, grants []*Permission) error {
+	// Diff-replace convergence: concurrent replaces converge to the union
+	// of the two intents — accepted semantics: both writers are
+	// grant-holding admins, so no unauthorized state is reachable, and an
+	// op survives removal only as another admin's explicit concurrent
+	// grant.
 	client := rp.Platform.GetClient(ctx)
 	stored, err := client.Permission.Query().Where(permission.RoleID(roleID)).All(ctx)
 	if err != nil {
@@ -195,20 +202,27 @@ func (rp *roleRP) ReplaceGrants(ctx context.Context, roleID string, grants []*Pe
 	for op, g := range wantedByOp {
 		existing, ok := storedByOp[op]
 		if !ok {
-			created, cerr := client.Permission.Create().
+			cerr := client.Permission.Create().
 				SetRoleID(roleID).
 				SetOperation(op).
 				SetScopeKind(g.ScopeKind).
-				Save(ctx)
-			if cerr != nil {
-				// A racing writer may have won the unique (role_id, operation);
-				// treat the constraint as convergence, not failure.
-				if !ent.IsConstraintError(cerr) {
-					return rp.Platform.HandleEntError(cerr)
-				}
-				continue
+				OnConflictColumns(permission.FieldRoleID, permission.FieldOperation).
+				DoNothing().
+				Exec(ctx)
+			if cerr != nil && !errors.Is(cerr, sql.ErrNoRows) {
+				return rp.Platform.HandleEntError(cerr)
 			}
-			if err := rp.replacePolicyLinks(ctx, client, created.ID, g.PolicyIDs); err != nil {
+			// ErrNoRows is the DoNothing conflict shape: a concurrent
+			// writer seated this op first. The row exists either way —
+			// fall through to the same re-query and link replacement, or
+			// the loser's op ships without its policy links.
+			row, qerr := client.Permission.Query().
+				Where(permission.RoleID(roleID), permission.Operation(op)).
+				Only(ctx)
+			if qerr != nil {
+				return rp.Platform.HandleEntError(qerr)
+			}
+			if err := rp.replacePolicyLinks(ctx, client, row.ID, g.PolicyIDs); err != nil {
 				return err
 			}
 			continue
@@ -277,7 +291,7 @@ func (rp *roleRP) RemoveMember(ctx context.Context, roleID, principalType, princ
 func (rp *roleRP) ListMembers(ctx context.Context, in *MemberListIn) (*MemberListOut, error) {
 	query := rp.Platform.GetClient(ctx).PrincipalRole.Query().Where(principalrole.RoleID(in.RoleID))
 	helper.Where(query, in.PrincipalType != nil, func() predicate.PrincipalRole { return principalrole.PrincipalTypeEQ(*in.PrincipalType) })
-	total, offset, limit, err := shared.Paginate(ctx, query, in.PageRequest, helper.DefaultPageSizeUnlimit)
+	total, offset, limit, err := helper.Paginate(ctx, query, in.PageRequest, helper.DefaultPageSizeUnlimit)
 	if err != nil {
 		return nil, rp.Platform.HandleEntError(err)
 	}
@@ -364,18 +378,15 @@ func (rp *roleRP) policyLinks(ctx context.Context, client *ent.Client, permissio
 }
 
 func (rp *roleRP) replacePolicyLinks(ctx context.Context, client *ent.Client, permissionID string, policyIDs []string) error {
-	// Delete-then-insert beats an intersection diff at this size — a grant
-	// carries at most a handful of links.
 	if _, err := client.PermissionPolicy.Delete().Where(permissionpolicy.PermissionID(permissionID)).Exec(ctx); err != nil {
 		return rp.Platform.HandleEntError(err)
 	}
 	for _, pid := range policyIDs {
-		if _, err := client.PermissionPolicy.Create().SetPermissionID(permissionID).SetPolicyID(pid).Save(ctx); err != nil {
-			// Mirror ReplaceGrants: a unique race means another writer set
-			// the same link, which is the convergence we wanted anyway.
-			if !ent.IsConstraintError(err) {
-				return rp.Platform.HandleEntError(err)
-			}
+		if err := client.PermissionPolicy.Create().SetPermissionID(permissionID).SetPolicyID(pid).
+			OnConflictColumns(permissionpolicy.FieldPermissionID, permissionpolicy.FieldPolicyID).
+			DoNothing().
+			Exec(ctx); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return rp.Platform.HandleEntError(err)
 		}
 	}
 	return nil

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(curl *)",
+      "Bash(grpcurl *)",
+      "Bash(docker *)",
+      "Bash(./nx *)",
+      "Bash(node .nx/nxw.js *)"
+    ],
+    "deny": [
+      "Bash(nohup)",
+      "Bash(kill)",
+      "Bash(node *)",
+      "Bash(npm *)",
+      "Bash(yarn *)",
+      "Bash(pnpm exec *)",
+      "Bash(go run *)",
+      "Bash(go tool *)",
+      "Bash(golangci-lint *)",
+      "Bash(vitest *)",
+      "Bash(git * --no-verify*)",
+      "Bash(git commit -n *)",
+      "Bash(LEFTHOOK*)"
+    ]
+  }
+}

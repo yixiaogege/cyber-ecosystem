@@ -6,13 +6,23 @@
 
 For Go-side consumption (mapping, error handling, import aliases) see `docs/conventions/kratos/CONVENTIONS.md`.
 
+## Read map
+
+| About to touch | Read first |
+|---|---|
+| any `.proto` under `proto/cyber/**` | §1, §2, §3, §4 |
+| custom annotations (`proto/ext/v1/*.proto`) | §5 |
+| an error enum or its client copy | §4, §8 step 5 |
+| generation config, `proto/cmd/**` | §7 |
+| closing a contract change | §8, §9 |
+
 ---
 
 ## 1. Layout
 
 - **Per-service domain:** `proto/cyber/<service>/v1/*.proto` — a service's own contracts (entities, service, service-specific errors).
 - **Shared kernel:** `proto/cyber/shared/<area>/v1/*.proto` — cross-service types: `shared/common/v1` (pagination + shared value types), `shared/errors/v1` (generic error enums).
-- **Custom annotations:** `proto/ext/v1/*.proto` — repo-specific proto options (`method` desc, `access`, `builtin`, `datascope`).
+- **Custom annotations:** `proto/ext/v1/*.proto` — repo-specific proto options (`method` desc, `access`, `datascope`).
 - **Kratos errors option:** `proto/errors/errors.proto` (vendored) — provides `errors.code` / `errors.default_code` for error enums.
 
 A service MUST own its proto under `cyber/<service>/v1/`; shared types go under `cyber/shared/...`, never duplicated per service.
@@ -53,7 +63,7 @@ Requests don't need this (input is presence-based), so they use the lighter `opt
 
 - **Time:** `google.protobuf.Timestamp`.
 - **Path-bound fields** (bound from `{xxx}` in `google.api.http`): MUST be plain (non-`optional`, non-wrapper). Always present from the URL; `optional`/wrapper generates a proto oneof that conflicts with `body:"*"` decode ("field already set for oneof").
-- **Validation:** `(buf.validate.field)` rules inline, correct and reasonable — `required` for mandatory, `string.min_len`/`max_len`/`pattern` for format, `cel` for cross-field. Validate at the boundary (server inbound); do not re-validate in biz.
+- **Validation:** `(buf.validate.field)` rules inline, correct and reasonable — `required` for mandatory, `string.min_len`/`max_len`/`pattern` for format, `cel` for cross-field. Cross-field rules are **message-level** (`(buf.validate.message).cel`): field-level `this` binds the field *value* — buf lint rejects field selection on a scalar at compile time. Validate at the boundary (server inbound); do not re-validate in biz.
 
 > **Client note.** On the client, empty is represented per transport: Connect (protobuf-es) → `undefined`; HTTP (hey-api SDK) → `null` (wire value preserved). Known deviation: gnostic renders WKT wrappers as plain types without `nullable`, so hey-api types say `id?: string` while the wire may carry an explicit `null` — consumer code must not non-null-assert these fields. gnostic is upstream low-maintenance; do not expect this to be fixed there.
 >
@@ -68,11 +78,11 @@ Requests don't need this (input is presence-based), so they use the lighter `opt
 Two layers of error enums, both using the kratos `errors.proto` option (`errors.code` = HTTP status):
 
 - **Shared generic** (`cyber.shared.errors.v1`): `GeneralError` (enum values mirror HTTP status: 4xx client / 5xx server), `InfraError` (3xxx db/cache/storage/mq/network), `FlowError`. Reused by every service — do not redefine generic codes per service.
-- **Service business** (`cyber.<service>/v1/error_reason.proto`): a service-semantic enum — `System` for system, e.g. `SYSTEM_INVALID_STATUS_TRANSITION` (6xxx range). **The enum name carries the service identity**: buf's `ENUM_VALUE_PREFIX` then forces every value to start with the service prefix, so the wire reason is unique across services by construction. Do not name this enum `ErrorReason` (generic prefix collides the moment a second service copies the template).
+- **Service business** (`cyber.<service>/v1/error_reason.proto`): a service-semantic enum — `System` for system, e.g. `SYSTEM_SMS_RATE_LIMITED` (6xxx range as **disjoint per-service blocks**: a service occupies decades and continues when one fills — system holds 600x–610x today, recorded in its enum header; a new service takes the next free block (62xx) and records its holdings the same way). **The enum name carries the service identity**: buf's `ENUM_VALUE_PREFIX` then forces every value to start with the service prefix, so the wire reason is unique across services by construction. Do not name this enum `ErrorReason` (generic prefix collides the moment a second service copies the template).
 
 **Wire reason shape & i18n.** The wire reason is the bare proto value name (e.g. `SYSTEM_INVALID_STATUS_TRANSITION`) — protobuf APIv2's `String()` emits no Go type prefix. `ENUM_VALUE_PREFIX` makes the value name unique across services, so it doubles as the client-side error identity: i18n catalogs key error copy as `error_<ValueName>` and the frontend looks it up directly, no transformation.
 
-**Removing an error value reserves its number** (`reserved 6050;`, mirroring `reserved 6031;`): a deleted number left unreserved lets a future value silently reuse it, deserializing old wire data into the wrong semantics. The reserved line replaces the entry in place; the three i18n copies are deleted in the same change.
+**Removing an error value before first release deletes it outright**: the number returns to the pool (later values may take the vacated slot, e.g. `6101` after its block emptied), and the error-copy keys are deleted from every locale file in the same change. Tombstones (`reserved N;` with a trailing why-comment naming the departed value) exist only for enums whose wire carries history — once old wire data is in the wild, an unreserved number lets a future value silently reuse it and deserialize that data into the wrong semantics.
 
 Go side consumes generated `errorspb.ErrorXxx("")` (see kratos CONVENTIONS §5/§6).
 
@@ -84,8 +94,8 @@ The `(errors.code)` option comes from the vendored `proto/errors/errors.proto` (
 
 - **REST mapping:** every RPC has `option (google.api.http)` — `/api/v1/<service>/<resources>[/{id}]`, verb by CRUD (POST create / GET list-or-get / PUT update / DELETE delete).
 - **Repeated input ⇒ POST + body, not GET query:** the transport's GET-query binding does not reliably carry `repeated` fields (they arrive empty and fail `min_items`). Batch reads marshal ids in a POST body — minting-style batch reads are action-shaped anyway.
-- **Method desc (facts):** `option (cyber.ext.v1.method) = {comment, action}` — `comment` is the human-readable one-liner (Chinese OK), `action` (`ACTION_READ` / `ACTION_WRITE`) is the effect semantics the audit layer classifies on (allow side collects WRITE only). Facts only — policy knobs (audit toggles etc.) never live here. Mandatory on every business RPC, machine-enforced by `TestEveryBusinessRPCDeclaresAction` (`shared-go/kratos/security`, no exemptions). Consumed at runtime via proto reflection (`shared-go/helper/proto_reflect.go` reads the comment face; the Resource catalog transcribes it), not by codegen/docs. Custom option value types are compile-time contracts: reshaping one is a coordinated one-shot across all declarations and consumers, never a runtime-compat concern. See `proto/ext/v1/desc.proto`.
-- **Access policy:** `option (cyber.ext.v1.access)` — `ACCESS_PUBLIC` / `ACCESS_ADMIN` / `ACCESS_APP`. **MUST be declared on every business RPC — there is no default level.** An unannotated RPC resolves to `ACCESS_UNSPECIFIED`, which servers wire to the deny-by-default guard: it fails loud at runtime (`MISSING_ANNOTATION`, 503) rather than silently falling back to ADMIN. Only framework built-ins outside `cyber.*` bypass the guard. Machine-enforced by `TestEveryBusinessRPCDeclaresAccess` (`shared-go/kratos/security`), whose exemption list holds one deliberate entry: `cyber.system.v1.ResourceService.ListResource` exercises the 503 path on purpose. See `proto/ext/v1/access.proto`.
+- **Method desc (facts):** `option (cyber.ext.v1.method) = {comment, action}` — `comment` is the human-readable one-liner, `action` (`ACTION_READ` / `ACTION_WRITE`) is the effect semantics the audit layer classifies on (allow side collects WRITE only). Facts only — policy knobs (audit toggles etc.) never live here. Mandatory on every business RPC, machine-enforced by `TestEveryBusinessRPCDeclaresAction` (`shared-go/kratos/security`, no exemptions). Consumed at runtime via proto reflection (`shared-go/helper/proto_reflect.go` reads the comment face; the Resource catalog transcribes it), not by codegen/docs. Custom option value types are compile-time contracts: reshaping one is a coordinated one-shot across all declarations and consumers, never a runtime-compat concern. See `proto/ext/v1/desc.proto`.
+- **Access policy:** `option (cyber.ext.v1.access)` — `ACCESS_PUBLIC` / `ACCESS_BUILTIN` / `ACCESS_PLATFORM` / `ACCESS_ADMIN`. **MUST be declared on every business RPC — there is no default level.** An unannotated RPC resolves to `ACCESS_UNSPECIFIED`, which servers wire to the deny-by-default guard: it fails loud at runtime (`MISSING_ANNOTATION`, 503) rather than silently falling back to ADMIN. Only framework built-ins outside `cyber.*` bypass the guard. Machine-enforced by `TestEveryBusinessRPCDeclaresAccess` (`shared-go/kratos/security`), exemption list empty — the unannotated-rejection path lives in `TestDefaultGuard`. See `proto/ext/v1/access.proto`. **BUILTIN is a member-plane trust ring** — any live session (member H5 included) may call it, with no plane guard, no operation authz, and no datascope (no Decision in ctx): only me-face / own-keyed RPCs qualify (the caller reads or writes its own row by subject). Informational or resource-shaped surfaces — catalogs, previews, streaming fixtures — start at ACCESS_ADMIN; a datascope that a BUILTIN face would need silently does not exist there.
 
 ---
 
@@ -103,7 +113,7 @@ The `(errors.code)` option comes from the vendored `proto/errors/errors.proto` (
 - `gen/` is **derived**: change proto → regenerate via the owning Nx target (e.g. `./nx run proto:generate`), never hand-edit gen.
 - Proto is the single source of truth; Go struct fields / JSON tags follow generated code.
 - **Pipeline tools are Go, under `proto/cmd/`** — the pipeline's own tooling lives with the pipeline, in the repo's single Go module: `cmd/catalog` (derives the per-package operation manifests below) and `cmd/clean-gen` (pre-regen wipe; hand-maintained root files and `node_modules` survive; all filesystem access goes through `os.Root`, sandbox-confined by construction). The Node scripts era is retired; pnpm/openapi-ts invocations stay in target commands — package-manager calls are orchestration, not tool logic.
-- **Operation manifests (`gen/catalog/<package>.json`) are derived output** — `proto:generate:catalog` feeds `buf build`'s image to `cmd/catalog`, which emits one manifest per service-bearing proto package (services, methods, comment/access/builtin/datascope/http faces). The system service live-loads them as its federated grant catalog: a new service enters the grant tree when its manifest ships — no system code change, no restart. The JSON tags are a contract between `cmd/catalog` and system's resource module; both sides carry the sync note.
+- **Operation manifests (`gen/catalog/<package>.json`) are derived output** — `proto:generate:catalog` feeds `buf build`'s image to `cmd/catalog`, which emits one manifest per service-bearing proto package (services, methods, comment/access/datascope/http faces). The system service live-loads them as its federated grant catalog: a new service enters the grant tree when its manifest ships — no system code change, no restart. The JSON tags are a contract between `cmd/catalog` and system's resource module; both sides carry the sync note.
 
 ---
 
@@ -113,11 +123,11 @@ The `(errors.code)` option comes from the vendored `proto/errors/errors.proto` (
 2. New RPC: `<Verb><Entity>` + `Request`/`Response` messages + `google.api.http` + `method` desc (comment + action) + `access` (both required on every business RPC — see §5). Follow the verb order.
 3. New error reason: generic → `cyber.shared.errors.v1`; service-specific → `cyber.<service>/v1/error_reason.proto` (6xxx). Both with `errors.code`.
 4. Regenerate everything from the one source: `./nx run proto:generate` (gates on lint + format:check, then Go + connect-ts + OpenAPI/openapi-ts). Review the `gen/` diff — it must contain only what the source change implies; exclude unintended churn. `./nx run proto:check-drift` proves sync when in doubt.
-5. A new error reason also means client copy: add `error_<ValueName>` to the client error vocabulary (`messages/error/`) in **every locale registered in the client's paraglide settings** (`project.inlang/settings.json` — the registered set is per-fork and that file is the truth) — a reason without copy renders raw on the client.
+5. A new error reason also means client copy: add `error_<ValueName>` to the error vocabulary (`messages/error/`) of **every client whose error union includes the package** — not just the consuming one; the union type-breaks on the new value — in **every locale registered in that client's paraglide settings** (`project.inlang/settings.json` — the registered set is per-fork and that file is the truth). A reason without copy renders raw on the client.
 6. `./nx run proto:breaking` before merging (FILE rules vs `HEAD`). Blind spot: it cannot see protovalidate rule removals/weakenings — review validation rules explicitly (§9).
 7. Build the affected service (`./nx run <service>:build`); if the client surface changed, run the client verification chain (`docs/conventions/tanstack/CONVENTIONS.md §11`).
 
-Done = every command's exit code checked; breaking green (or weakenings consciously reviewed); gen diff clean; error copy present in every registered locale.
+Done = every command's exit code checked; breaking green (or weakenings consciously reviewed); gen diff clean; error copy present in every registered locale. Close with an evidence declaration line (what ran, what was observed); gates = this checklist's chain plus `proto:check-drift` at close; runtime verification = a counterexample live probe on the producer and one consumer.
 
 ---
 

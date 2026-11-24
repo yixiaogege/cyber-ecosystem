@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package cyber.system.v1;
+
+import "buf/validate/validate.proto";
+import "cyber/shared/common/v1/pagination.proto";
+import "ext/v1/access.proto";
+import "ext/v1/desc.proto";
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/wrappers.proto";
+
+option go_package = "cyber-ecosystem/gen/go/cyber/system/v1";
+
+// Population registry read face: instances of the compile-time plane
+// vocabulary (backend | member). Codes are join keys — immutable once born.
+// Rows are deploy-declared state, born and reconciled by the seed.
+service PopulationService {
+  option (cyber.ext.v1.service_comment) = "用户类型";
+  rpc ListPopulations(ListPopulationsRequest) returns (ListPopulationsResponse) {
+    option (cyber.ext.v1.method) = {
+      comment: "用户类型列表"
+      action: ACTION_READ
+    };
+    option (cyber.ext.v1.access) = ACCESS_PLATFORM;
+    option (google.api.http) = {get: "/api/v1/system/populations"};
+  }
+}
+
+message Population {
+  google.protobuf.StringValue id = 1;
+  google.protobuf.Timestamp created_at = 2;
+  google.protobuf.Timestamp updated_at = 3;
+  google.protobuf.StringValue code = 4;
+  google.protobuf.StringValue name = 5;
+  google.protobuf.StringValue plane = 6;
+}
+
+// list
+message ListPopulationsRequest {
+  cyber.shared.common.v1.PageRequest page = 1;
+  optional string code = 2;
+  optional string name = 3;
+  repeated string order_by = 100 [(buf.validate.field).cel = {
+    id: "ListPopulationsRequest.order_by"
+    message: ""
+    expression: "this.all(item, size(item) == 0 || item.matches('^(code|name|createdAt|updatedAt):(asc|desc)$'))"
+  }];
+}
+
+message ListPopulationsResponse {
+  cyber.shared.common.v1.PageResponse page = 1;
+  repeated Population list = 2;
+}

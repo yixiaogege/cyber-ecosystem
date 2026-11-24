@@ -17,13 +17,14 @@ type EntErrorHandler func(error) error
 type CacheErrorHandler func(error) error
 type StorageErrorHandler func(error) error
 type MQErrorHandler func(error) error
+type SmsErrorHandler func(error) error
 
 type Platform struct {
 	cache              *cache.Cache
 	handleCacheError   CacheErrorHandler
 	db                 *ent.Client
 	handleEntError     EntErrorHandler
-	storage            *storage.Storage
+	storage            *TenantStorage
 	handleStorageError StorageErrorHandler
 	mq                 *mq.MQ
 	handleMQError      MQErrorHandler
@@ -34,7 +35,7 @@ func NewPlatform(
 	handleCacheError CacheErrorHandler,
 	db *ent.Client,
 	handleEntError EntErrorHandler,
-	storage *storage.Storage,
+	storage *TenantStorage,
 	handleStorageError StorageErrorHandler,
 	mq *mq.MQ,
 	handleMQError MQErrorHandler,
@@ -63,7 +64,11 @@ func (p *Platform) HandleEntError(err error) error { return p.handleEntError(err
 func (p *Platform) GetCache() *cache.Cache           { return p.cache }
 func (p *Platform) HandleCacheError(err error) error { return p.handleCacheError(err) }
 
-func (p *Platform) GetStorage() *storage.Storage       { return p.storage }
+func (p *Platform) GetStorageFor(ctx context.Context) *storage.View {
+	return p.storage.ForTenant(ctx)
+}
+
+func (p *Platform) GetStorageLimits() storage.Limits   { return p.storage.Limits() }
 func (p *Platform) HandleStorageError(err error) error { return p.handleStorageError(err) }
 
 func (p *Platform) GetMQ() *mq.MQ                 { return p.mq }
@@ -79,4 +84,6 @@ var ProviderSet = wire.NewSet(
 	NewStorageErrorHandler,
 	NewMQ,
 	NewMQErrorHandler,
+	NewSms,
+	NewSmsErrorHandler,
 )

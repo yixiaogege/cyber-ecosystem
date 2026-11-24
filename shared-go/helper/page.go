@@ -9,9 +9,14 @@ import (
 	"github.com/go-kratos/kratos/v3/errors"
 
 	commonv1 "cyber-ecosystem/gen/go/cyber/shared/common/v1"
+	errorspb "cyber-ecosystem/gen/go/cyber/shared/errors/v1"
 )
 
-var (
+// DefaultPageSizeMax couples to the proto contract: it must equal the
+// page_size lte cap (shared/common/v1 pagination.proto), and batch faces
+// size their max_items on the same number — one page of ids hydrates in
+// one call. Keep the three in lockstep.
+const (
 	DefaultPageSize        = 10
 	DefaultPageSizeMax     = 100
 	DefaultPageSizeUnlimit = 0
@@ -60,8 +65,7 @@ func ApplyPagination[Q QueryPaginator[Q]](ctx context.Context, query Q, req *com
 		if config.MaxSize > 0 {
 			return 0, 0, 0, ce
 		}
-		// Count may trigger query interceptors that append predicates in-place.
-		// Use a clone so the original query builder can still be reused safely.
+		// Clone: count may append interceptor predicates in place.
 		total, err = query.Clone().Count(ctx)
 		return total, 0, 0, err
 	}
@@ -82,6 +86,15 @@ func ApplyPagination[Q QueryPaginator[Q]](ctx context.Context, query Q, req *com
 
 	query.Offset(offset).Limit(limit)
 	return total, offset, limit, nil
+}
+
+// Paginate binds a page request onto a query with the default page size and
+// the given max; an invalid page yields the shared pagination error.
+func Paginate[Q QueryPaginator[Q]](ctx context.Context, query Q, req *commonv1.PageRequest, maxSize int) (total, offset, limit int, err error) {
+	return ApplyPagination(ctx, query, req,
+		NewPageConfig(DefaultPageSize, maxSize),
+		errorspb.ErrorGeneralErrorPaginationInvalidArgument(""),
+	)
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -140,6 +153,25 @@ func toInt32(n int) int32 {
 		return math.MinInt32
 	}
 	return int32(n)
+}
+
+// PageWindow resolves a page request onto an in-memory slice: the same
+// defaults and cap query-level pagination applies (absent page = 1, absent
+// size = the default, oversized = capped). The folded-list faces share this
+// one resolver so their in-memory paging can't drift from the query-level
+// answers.
+func PageWindow(req *commonv1.PageRequest) (offset, limit int) {
+	pageNo, pageSize := 1, DefaultPageSize
+	if req.GetPageNo() > 0 {
+		pageNo = int(req.GetPageNo())
+	}
+	if req.GetPageSize() > 0 {
+		pageSize = int(req.GetPageSize())
+	}
+	if pageSize > DefaultPageSizeMax {
+		pageSize = DefaultPageSizeMax
+	}
+	return (pageNo - 1) * pageSize, pageSize
 }
 
 func BuildPageResponse(total, offset, limit int) *commonv1.PageResponse {

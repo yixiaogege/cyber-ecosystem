@@ -30,7 +30,7 @@ export function RecentActivity({
 }: Readonly<{ items: readonly Activity[]; isDay: boolean }>) {
   if (items.length === 0) {
     return (
-      <p className="px-4 py-6 text-center text-ink-tertiary text-xs">
+      <p className="text-ink-tertiary px-4 py-6 text-center text-xs">
         {m.dashboard_overview_act_empty()}
       </p>
     );
@@ -56,10 +56,10 @@ export function RecentActivity({
             className="text-ink-secondary"
             key={`${item.type}-${String(item.occurredAt)}-${item.content}`}
           >
-            <td className="whitespace-nowrap border-line-soft border-b px-4 py-2 tabular-nums">
+            <td className="border-line-soft border-b px-4 py-2 whitespace-nowrap tabular-nums">
               {formatTime(item.occurredAt, isDay)}
             </td>
-            <td className="whitespace-nowrap border-line-soft border-b px-4 py-2">
+            <td className="border-line-soft border-b px-4 py-2 whitespace-nowrap">
               {TYPE_LABEL[item.type]?.() ?? item.type}
             </td>
             <td className="border-line-soft border-b px-4 py-2">{item.content || "—"}</td>

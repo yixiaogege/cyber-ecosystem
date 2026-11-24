@@ -17,21 +17,70 @@ var _ = new(context.Context)
 
 const _ = http.SupportPackageIsVersion3
 
+const OperationAuthServiceAdminUnbindCredential = "/cyber.system.v1.AuthService/AdminUnbindCredential"
+const OperationAuthServiceBeginBindCredential = "/cyber.system.v1.AuthService/BeginBindCredential"
+const OperationAuthServiceBeginIdentityLogin = "/cyber.system.v1.AuthService/BeginIdentityLogin"
+const OperationAuthServiceBindCredential = "/cyber.system.v1.AuthService/BindCredential"
+const OperationAuthServiceChangePassword = "/cyber.system.v1.AuthService/ChangePassword"
 const OperationAuthServiceGetCurrentUser = "/cyber.system.v1.AuthService/GetCurrentUser"
+const OperationAuthServiceGetLoginConfig = "/cyber.system.v1.AuthService/GetLoginConfig"
+const OperationAuthServiceGetSecurityStatus = "/cyber.system.v1.AuthService/GetSecurityStatus"
+const OperationAuthServiceImportAccounts = "/cyber.system.v1.AuthService/ImportAccounts"
 const OperationAuthServiceLogin = "/cyber.system.v1.AuthService/Login"
+const OperationAuthServiceLoginByIdentity = "/cyber.system.v1.AuthService/LoginByIdentity"
 const OperationAuthServiceLogout = "/cyber.system.v1.AuthService/Logout"
+const OperationAuthServiceResetPassword = "/cyber.system.v1.AuthService/ResetPassword"
+const OperationAuthServiceSendBindSmsCode = "/cyber.system.v1.AuthService/SendBindSmsCode"
+const OperationAuthServiceSendSmsCode = "/cyber.system.v1.AuthService/SendSmsCode"
+const OperationAuthServiceUnbindCredential = "/cyber.system.v1.AuthService/UnbindCredential"
 
 type AuthServiceHTTPServer interface {
+	// AdminUnbindCredential The operator's force-unbind: the member leg's own machine with the
+	// target named on the wire. The sole-path guard rides identically —
+	// removal that would leave the account with zero login paths is
+	// refused here too.
+	AdminUnbindCredential(context.Context, *AdminUnbindCredentialRequest) (*AdminUnbindCredentialResponse, error)
+	BeginBindCredential(context.Context, *BeginBindCredentialRequest) (*BeginBindCredentialResponse, error)
+	BeginIdentityLogin(context.Context, *BeginIdentityLoginRequest) (*BeginIdentityLoginResponse, error)
+	BindCredential(context.Context, *BindCredentialRequest) (*BindCredentialResponse, error)
+	ChangePassword(context.Context, *ChangePasswordRequest) (*ChangePasswordResponse, error)
 	GetCurrentUser(context.Context, *GetCurrentUserRequest) (*GetCurrentUserResponse, error)
+	GetLoginConfig(context.Context, *GetLoginConfigRequest) (*GetLoginConfigResponse, error)
+	GetSecurityStatus(context.Context, *GetSecurityStatusRequest) (*GetSecurityStatusResponse, error)
+	// ImportAccounts Bulk registration on the operator's behalf: one file's rows become
+	// accounts with an sms credential each — the exact dance the sms login's
+	// auto-registration runs, minus the proof (the operator collected the
+	// numbers off-line). A phone that already names an account skips — the
+	// credential table's own uniqueness, read ahead of the write — and
+	// nothing rolls back the rows that already landed.
+	ImportAccounts(context.Context, *ImportAccountsRequest) (*ImportAccountsResponse, error)
 	Login(context.Context, *LoginRequest) (*LoginResponse, error)
+	LoginByIdentity(context.Context, *LoginByIdentityRequest) (*LoginByIdentityResponse, error)
 	Logout(context.Context, *LogoutRequest) (*LogoutResponse, error)
+	ResetPassword(context.Context, *ResetPasswordRequest) (*ResetPasswordResponse, error)
+	SendBindSmsCode(context.Context, *SendBindSmsCodeRequest) (*SendBindSmsCodeResponse, error)
+	SendSmsCode(context.Context, *SendSmsCodeRequest) (*SendSmsCodeResponse, error)
+	UnbindCredential(context.Context, *UnbindCredentialRequest) (*UnbindCredentialResponse, error)
 }
 
 func RegisterAuthServiceHTTPServer(s *http.Server, srv AuthServiceHTTPServer) {
 	r := s.Route("/")
 	r.Handle("POST", "/api/v1/system/auth/login", _AuthService_Login0_HTTP_Handler(srv))
+	r.Handle("POST", "/api/v1/system/auth/login-by-identity", _AuthService_LoginByIdentity0_HTTP_Handler(srv))
+	r.Handle("POST", "/api/v1/system/auth/begin-identity-login", _AuthService_BeginIdentityLogin0_HTTP_Handler(srv))
+	r.Handle("POST", "/api/v1/system/auth/send-sms-code", _AuthService_SendSmsCode0_HTTP_Handler(srv))
+	r.Handle("GET", "/api/v1/system/auth/login-config", _AuthService_GetLoginConfig0_HTTP_Handler(srv))
+	r.Handle("POST", "/api/v1/system/auth/bind-credential", _AuthService_BindCredential0_HTTP_Handler(srv))
+	r.Handle("POST", "/api/v1/system/auth/begin-bind-credential", _AuthService_BeginBindCredential0_HTTP_Handler(srv))
+	r.Handle("POST", "/api/v1/system/auth/send-bind-sms-code", _AuthService_SendBindSmsCode0_HTTP_Handler(srv))
+	r.Handle("POST", "/api/v1/system/auth/unbind-credential", _AuthService_UnbindCredential0_HTTP_Handler(srv))
+	r.Handle("POST", "/api/v1/system/auth/reset-password", _AuthService_ResetPassword0_HTTP_Handler(srv))
+	r.Handle("POST", "/api/v1/system/me/password", _AuthService_ChangePassword0_HTTP_Handler(srv))
+	r.Handle("GET", "/api/v1/system/me/security", _AuthService_GetSecurityStatus0_HTTP_Handler(srv))
 	r.Handle("POST", "/api/v1/system/auth/logout", _AuthService_Logout0_HTTP_Handler(srv))
 	r.Handle("GET", "/api/v1/system/me", _AuthService_GetCurrentUser0_HTTP_Handler(srv))
+	r.Handle("POST", "/api/v1/system/auth/import-accounts", _AuthService_ImportAccounts0_HTTP_Handler(srv))
+	r.Handle("POST", "/api/v1/system/auth/admin-unbind-credential", _AuthService_AdminUnbindCredential0_HTTP_Handler(srv))
 }
 
 func _AuthService_Login0_HTTP_Handler(srv AuthServiceHTTPServer) func(ctx http.Context) error {
@@ -49,6 +98,215 @@ func _AuthService_Login0_HTTP_Handler(srv AuthServiceHTTPServer) func(ctx http.C
 			return err
 		}
 		reply := out.(*LoginResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _AuthService_LoginByIdentity0_HTTP_Handler(srv AuthServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in LoginByIdentityRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationAuthServiceLoginByIdentity)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.LoginByIdentity(ctx, req.(*LoginByIdentityRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*LoginByIdentityResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _AuthService_BeginIdentityLogin0_HTTP_Handler(srv AuthServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in BeginIdentityLoginRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationAuthServiceBeginIdentityLogin)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.BeginIdentityLogin(ctx, req.(*BeginIdentityLoginRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*BeginIdentityLoginResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _AuthService_SendSmsCode0_HTTP_Handler(srv AuthServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in SendSmsCodeRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationAuthServiceSendSmsCode)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.SendSmsCode(ctx, req.(*SendSmsCodeRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*SendSmsCodeResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _AuthService_GetLoginConfig0_HTTP_Handler(srv AuthServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetLoginConfigRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationAuthServiceGetLoginConfig)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetLoginConfig(ctx, req.(*GetLoginConfigRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*GetLoginConfigResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _AuthService_BindCredential0_HTTP_Handler(srv AuthServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in BindCredentialRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationAuthServiceBindCredential)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.BindCredential(ctx, req.(*BindCredentialRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*BindCredentialResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _AuthService_BeginBindCredential0_HTTP_Handler(srv AuthServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in BeginBindCredentialRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationAuthServiceBeginBindCredential)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.BeginBindCredential(ctx, req.(*BeginBindCredentialRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*BeginBindCredentialResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _AuthService_SendBindSmsCode0_HTTP_Handler(srv AuthServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in SendBindSmsCodeRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationAuthServiceSendBindSmsCode)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.SendBindSmsCode(ctx, req.(*SendBindSmsCodeRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*SendBindSmsCodeResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _AuthService_UnbindCredential0_HTTP_Handler(srv AuthServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in UnbindCredentialRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationAuthServiceUnbindCredential)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.UnbindCredential(ctx, req.(*UnbindCredentialRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*UnbindCredentialResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _AuthService_ResetPassword0_HTTP_Handler(srv AuthServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in ResetPasswordRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationAuthServiceResetPassword)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.ResetPassword(ctx, req.(*ResetPasswordRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*ResetPasswordResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _AuthService_ChangePassword0_HTTP_Handler(srv AuthServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in ChangePasswordRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationAuthServiceChangePassword)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.ChangePassword(ctx, req.(*ChangePasswordRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*ChangePasswordResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _AuthService_GetSecurityStatus0_HTTP_Handler(srv AuthServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetSecurityStatusRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationAuthServiceGetSecurityStatus)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetSecurityStatus(ctx, req.(*GetSecurityStatusRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*GetSecurityStatusResponse)
 		return ctx.Result(200, reply)
 	}
 }
@@ -91,10 +349,71 @@ func _AuthService_GetCurrentUser0_HTTP_Handler(srv AuthServiceHTTPServer) func(c
 	}
 }
 
+func _AuthService_ImportAccounts0_HTTP_Handler(srv AuthServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in ImportAccountsRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationAuthServiceImportAccounts)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.ImportAccounts(ctx, req.(*ImportAccountsRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*ImportAccountsResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _AuthService_AdminUnbindCredential0_HTTP_Handler(srv AuthServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in AdminUnbindCredentialRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationAuthServiceAdminUnbindCredential)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.AdminUnbindCredential(ctx, req.(*AdminUnbindCredentialRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*AdminUnbindCredentialResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
 type AuthServiceHTTPClient interface {
+	// AdminUnbindCredential The operator's force-unbind: the member leg's own machine with the
+	// target named on the wire. The sole-path guard rides identically —
+	// removal that would leave the account with zero login paths is
+	// refused here too.
+	AdminUnbindCredential(ctx context.Context, req *AdminUnbindCredentialRequest, opts ...http.CallOption) (rsp *AdminUnbindCredentialResponse, err error)
+	BeginBindCredential(ctx context.Context, req *BeginBindCredentialRequest, opts ...http.CallOption) (rsp *BeginBindCredentialResponse, err error)
+	BeginIdentityLogin(ctx context.Context, req *BeginIdentityLoginRequest, opts ...http.CallOption) (rsp *BeginIdentityLoginResponse, err error)
+	BindCredential(ctx context.Context, req *BindCredentialRequest, opts ...http.CallOption) (rsp *BindCredentialResponse, err error)
+	ChangePassword(ctx context.Context, req *ChangePasswordRequest, opts ...http.CallOption) (rsp *ChangePasswordResponse, err error)
 	GetCurrentUser(ctx context.Context, req *GetCurrentUserRequest, opts ...http.CallOption) (rsp *GetCurrentUserResponse, err error)
+	GetLoginConfig(ctx context.Context, req *GetLoginConfigRequest, opts ...http.CallOption) (rsp *GetLoginConfigResponse, err error)
+	GetSecurityStatus(ctx context.Context, req *GetSecurityStatusRequest, opts ...http.CallOption) (rsp *GetSecurityStatusResponse, err error)
+	// ImportAccounts Bulk registration on the operator's behalf: one file's rows become
+	// accounts with an sms credential each — the exact dance the sms login's
+	// auto-registration runs, minus the proof (the operator collected the
+	// numbers off-line). A phone that already names an account skips — the
+	// credential table's own uniqueness, read ahead of the write — and
+	// nothing rolls back the rows that already landed.
+	ImportAccounts(ctx context.Context, req *ImportAccountsRequest, opts ...http.CallOption) (rsp *ImportAccountsResponse, err error)
 	Login(ctx context.Context, req *LoginRequest, opts ...http.CallOption) (rsp *LoginResponse, err error)
+	LoginByIdentity(ctx context.Context, req *LoginByIdentityRequest, opts ...http.CallOption) (rsp *LoginByIdentityResponse, err error)
 	Logout(ctx context.Context, req *LogoutRequest, opts ...http.CallOption) (rsp *LogoutResponse, err error)
+	ResetPassword(ctx context.Context, req *ResetPasswordRequest, opts ...http.CallOption) (rsp *ResetPasswordResponse, err error)
+	SendBindSmsCode(ctx context.Context, req *SendBindSmsCodeRequest, opts ...http.CallOption) (rsp *SendBindSmsCodeResponse, err error)
+	SendSmsCode(ctx context.Context, req *SendSmsCodeRequest, opts ...http.CallOption) (rsp *SendSmsCodeResponse, err error)
+	UnbindCredential(ctx context.Context, req *UnbindCredentialRequest, opts ...http.CallOption) (rsp *UnbindCredentialResponse, err error)
 }
 
 type AuthServiceHTTPClientImpl struct {
@@ -103,6 +422,95 @@ type AuthServiceHTTPClientImpl struct {
 
 func NewAuthServiceHTTPClient(client *http.Client) AuthServiceHTTPClient {
 	return &AuthServiceHTTPClientImpl{client}
+}
+
+// AdminUnbindCredential The operator's force-unbind: the member leg's own machine with the
+// target named on the wire. The sole-path guard rides identically —
+// removal that would leave the account with zero login paths is
+// refused here too.
+func (c *AuthServiceHTTPClientImpl) AdminUnbindCredential(ctx context.Context, in *AdminUnbindCredentialRequest, opts ...http.CallOption) (*AdminUnbindCredentialResponse, error) {
+	var out AdminUnbindCredentialResponse
+	pattern := "/api/v1/system/auth/admin-unbind-credential"
+	path := http.BuildPath(pattern, in)
+	opts = append([]http.CallOption{
+		http.Accept("application/protojson"),
+		http.ContentType("application/protojson"),
+		http.Operation(OperationAuthServiceAdminUnbindCredential),
+		http.PathTemplate(pattern),
+	}, opts...)
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *AuthServiceHTTPClientImpl) BeginBindCredential(ctx context.Context, in *BeginBindCredentialRequest, opts ...http.CallOption) (*BeginBindCredentialResponse, error) {
+	var out BeginBindCredentialResponse
+	pattern := "/api/v1/system/auth/begin-bind-credential"
+	path := http.BuildPath(pattern, in)
+	opts = append([]http.CallOption{
+		http.Accept("application/protojson"),
+		http.ContentType("application/protojson"),
+		http.Operation(OperationAuthServiceBeginBindCredential),
+		http.PathTemplate(pattern),
+	}, opts...)
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *AuthServiceHTTPClientImpl) BeginIdentityLogin(ctx context.Context, in *BeginIdentityLoginRequest, opts ...http.CallOption) (*BeginIdentityLoginResponse, error) {
+	var out BeginIdentityLoginResponse
+	pattern := "/api/v1/system/auth/begin-identity-login"
+	path := http.BuildPath(pattern, in)
+	opts = append([]http.CallOption{
+		http.Accept("application/protojson"),
+		http.ContentType("application/protojson"),
+		http.Operation(OperationAuthServiceBeginIdentityLogin),
+		http.PathTemplate(pattern),
+	}, opts...)
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *AuthServiceHTTPClientImpl) BindCredential(ctx context.Context, in *BindCredentialRequest, opts ...http.CallOption) (*BindCredentialResponse, error) {
+	var out BindCredentialResponse
+	pattern := "/api/v1/system/auth/bind-credential"
+	path := http.BuildPath(pattern, in)
+	opts = append([]http.CallOption{
+		http.Accept("application/protojson"),
+		http.ContentType("application/protojson"),
+		http.Operation(OperationAuthServiceBindCredential),
+		http.PathTemplate(pattern),
+	}, opts...)
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *AuthServiceHTTPClientImpl) ChangePassword(ctx context.Context, in *ChangePasswordRequest, opts ...http.CallOption) (*ChangePasswordResponse, error) {
+	var out ChangePasswordResponse
+	pattern := "/api/v1/system/me/password"
+	path := http.BuildPath(pattern, in)
+	opts = append([]http.CallOption{
+		http.Accept("application/protojson"),
+		http.ContentType("application/protojson"),
+		http.Operation(OperationAuthServiceChangePassword),
+		http.PathTemplate(pattern),
+	}, opts...)
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 func (c *AuthServiceHTTPClientImpl) GetCurrentUser(ctx context.Context, in *GetCurrentUserRequest, opts ...http.CallOption) (*GetCurrentUserResponse, error) {
@@ -115,6 +523,61 @@ func (c *AuthServiceHTTPClientImpl) GetCurrentUser(ctx context.Context, in *GetC
 		http.PathTemplate(pattern),
 	}, opts...)
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *AuthServiceHTTPClientImpl) GetLoginConfig(ctx context.Context, in *GetLoginConfigRequest, opts ...http.CallOption) (*GetLoginConfigResponse, error) {
+	var out GetLoginConfigResponse
+	pattern := "/api/v1/system/auth/login-config"
+	path := http.BuildPath(pattern, in, http.WithQueryParams())
+	opts = append([]http.CallOption{
+		http.Accept("application/protojson"),
+		http.Operation(OperationAuthServiceGetLoginConfig),
+		http.PathTemplate(pattern),
+	}, opts...)
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *AuthServiceHTTPClientImpl) GetSecurityStatus(ctx context.Context, in *GetSecurityStatusRequest, opts ...http.CallOption) (*GetSecurityStatusResponse, error) {
+	var out GetSecurityStatusResponse
+	pattern := "/api/v1/system/me/security"
+	path := http.BuildPath(pattern, in, http.WithQueryParams())
+	opts = append([]http.CallOption{
+		http.Accept("application/protojson"),
+		http.Operation(OperationAuthServiceGetSecurityStatus),
+		http.PathTemplate(pattern),
+	}, opts...)
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ImportAccounts Bulk registration on the operator's behalf: one file's rows become
+// accounts with an sms credential each — the exact dance the sms login's
+// auto-registration runs, minus the proof (the operator collected the
+// numbers off-line). A phone that already names an account skips — the
+// credential table's own uniqueness, read ahead of the write — and
+// nothing rolls back the rows that already landed.
+func (c *AuthServiceHTTPClientImpl) ImportAccounts(ctx context.Context, in *ImportAccountsRequest, opts ...http.CallOption) (*ImportAccountsResponse, error) {
+	var out ImportAccountsResponse
+	pattern := "/api/v1/system/auth/import-accounts"
+	path := http.BuildPath(pattern, in)
+	opts = append([]http.CallOption{
+		http.Accept("application/protojson"),
+		http.ContentType("application/protojson"),
+		http.Operation(OperationAuthServiceImportAccounts),
+		http.PathTemplate(pattern),
+	}, opts...)
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -138,6 +601,23 @@ func (c *AuthServiceHTTPClientImpl) Login(ctx context.Context, in *LoginRequest,
 	return &out, nil
 }
 
+func (c *AuthServiceHTTPClientImpl) LoginByIdentity(ctx context.Context, in *LoginByIdentityRequest, opts ...http.CallOption) (*LoginByIdentityResponse, error) {
+	var out LoginByIdentityResponse
+	pattern := "/api/v1/system/auth/login-by-identity"
+	path := http.BuildPath(pattern, in)
+	opts = append([]http.CallOption{
+		http.Accept("application/protojson"),
+		http.ContentType("application/protojson"),
+		http.Operation(OperationAuthServiceLoginByIdentity),
+		http.PathTemplate(pattern),
+	}, opts...)
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 func (c *AuthServiceHTTPClientImpl) Logout(ctx context.Context, in *LogoutRequest, opts ...http.CallOption) (*LogoutResponse, error) {
 	var out LogoutResponse
 	pattern := "/api/v1/system/auth/logout"
@@ -146,6 +626,74 @@ func (c *AuthServiceHTTPClientImpl) Logout(ctx context.Context, in *LogoutReques
 		http.Accept("application/protojson"),
 		http.ContentType("application/protojson"),
 		http.Operation(OperationAuthServiceLogout),
+		http.PathTemplate(pattern),
+	}, opts...)
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *AuthServiceHTTPClientImpl) ResetPassword(ctx context.Context, in *ResetPasswordRequest, opts ...http.CallOption) (*ResetPasswordResponse, error) {
+	var out ResetPasswordResponse
+	pattern := "/api/v1/system/auth/reset-password"
+	path := http.BuildPath(pattern, in)
+	opts = append([]http.CallOption{
+		http.Accept("application/protojson"),
+		http.ContentType("application/protojson"),
+		http.Operation(OperationAuthServiceResetPassword),
+		http.PathTemplate(pattern),
+	}, opts...)
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *AuthServiceHTTPClientImpl) SendBindSmsCode(ctx context.Context, in *SendBindSmsCodeRequest, opts ...http.CallOption) (*SendBindSmsCodeResponse, error) {
+	var out SendBindSmsCodeResponse
+	pattern := "/api/v1/system/auth/send-bind-sms-code"
+	path := http.BuildPath(pattern, in)
+	opts = append([]http.CallOption{
+		http.Accept("application/protojson"),
+		http.ContentType("application/protojson"),
+		http.Operation(OperationAuthServiceSendBindSmsCode),
+		http.PathTemplate(pattern),
+	}, opts...)
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *AuthServiceHTTPClientImpl) SendSmsCode(ctx context.Context, in *SendSmsCodeRequest, opts ...http.CallOption) (*SendSmsCodeResponse, error) {
+	var out SendSmsCodeResponse
+	pattern := "/api/v1/system/auth/send-sms-code"
+	path := http.BuildPath(pattern, in)
+	opts = append([]http.CallOption{
+		http.Accept("application/protojson"),
+		http.ContentType("application/protojson"),
+		http.Operation(OperationAuthServiceSendSmsCode),
+		http.PathTemplate(pattern),
+	}, opts...)
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *AuthServiceHTTPClientImpl) UnbindCredential(ctx context.Context, in *UnbindCredentialRequest, opts ...http.CallOption) (*UnbindCredentialResponse, error) {
+	var out UnbindCredentialResponse
+	pattern := "/api/v1/system/auth/unbind-credential"
+	path := http.BuildPath(pattern, in)
+	opts = append([]http.CallOption{
+		http.Accept("application/protojson"),
+		http.ContentType("application/protojson"),
+		http.Operation(OperationAuthServiceUnbindCredential),
 		http.PathTemplate(pattern),
 	}, opts...)
 	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)

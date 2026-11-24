@@ -10,6 +10,61 @@ import { AuthService } from "./auth_pb";
 export const login = AuthService.method.login;
 
 /**
+ * @generated from rpc cyber.system.v1.AuthService.LoginByIdentity
+ */
+export const loginByIdentity = AuthService.method.loginByIdentity;
+
+/**
+ * @generated from rpc cyber.system.v1.AuthService.BeginIdentityLogin
+ */
+export const beginIdentityLogin = AuthService.method.beginIdentityLogin;
+
+/**
+ * @generated from rpc cyber.system.v1.AuthService.SendSmsCode
+ */
+export const sendSmsCode = AuthService.method.sendSmsCode;
+
+/**
+ * @generated from rpc cyber.system.v1.AuthService.GetLoginConfig
+ */
+export const getLoginConfig = AuthService.method.getLoginConfig;
+
+/**
+ * @generated from rpc cyber.system.v1.AuthService.BindCredential
+ */
+export const bindCredential = AuthService.method.bindCredential;
+
+/**
+ * @generated from rpc cyber.system.v1.AuthService.BeginBindCredential
+ */
+export const beginBindCredential = AuthService.method.beginBindCredential;
+
+/**
+ * @generated from rpc cyber.system.v1.AuthService.SendBindSmsCode
+ */
+export const sendBindSmsCode = AuthService.method.sendBindSmsCode;
+
+/**
+ * @generated from rpc cyber.system.v1.AuthService.UnbindCredential
+ */
+export const unbindCredential = AuthService.method.unbindCredential;
+
+/**
+ * @generated from rpc cyber.system.v1.AuthService.ResetPassword
+ */
+export const resetPassword = AuthService.method.resetPassword;
+
+/**
+ * @generated from rpc cyber.system.v1.AuthService.ChangePassword
+ */
+export const changePassword = AuthService.method.changePassword;
+
+/**
+ * @generated from rpc cyber.system.v1.AuthService.GetSecurityStatus
+ */
+export const getSecurityStatus = AuthService.method.getSecurityStatus;
+
+/**
  * @generated from rpc cyber.system.v1.AuthService.Logout
  */
 export const logout = AuthService.method.logout;
@@ -18,3 +73,25 @@ export const logout = AuthService.method.logout;
  * @generated from rpc cyber.system.v1.AuthService.GetCurrentUser
  */
 export const getCurrentUser = AuthService.method.getCurrentUser;
+
+/**
+ * Bulk registration on the operator's behalf: one file's rows become
+ * accounts with an sms credential each — the exact dance the sms login's
+ * auto-registration runs, minus the proof (the operator collected the
+ * numbers off-line). A phone that already names an account skips — the
+ * credential table's own uniqueness, read ahead of the write — and
+ * nothing rolls back the rows that already landed.
+ *
+ * @generated from rpc cyber.system.v1.AuthService.ImportAccounts
+ */
+export const importAccounts = AuthService.method.importAccounts;
+
+/**
+ * The operator's force-unbind: the member leg's own machine with the
+ * target named on the wire. The sole-path guard rides identically —
+ * removal that would leave the account with zero login paths is
+ * refused here too.
+ *
+ * @generated from rpc cyber.system.v1.AuthService.AdminUnbindCredential
+ */
+export const adminUnbindCredential = AuthService.method.adminUnbindCredential;

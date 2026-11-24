@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect"
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -18,6 +20,7 @@ type PlatformAnalyticsCreate struct {
 	config
 	mutation *PlatformAnalyticsMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetCreatedAt sets the "created_at" field.
@@ -232,6 +235,7 @@ func (_c *PlatformAnalyticsCreate) createSpec() (*PlatformAnalytics, *sqlgraph.C
 		_node = &PlatformAnalytics{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(platformanalytics.Table, sqlgraph.NewFieldSpec(platformanalytics.FieldID, field.TypeString))
 	)
+	_spec.OnConflict = _c.conflict
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
@@ -263,11 +267,260 @@ func (_c *PlatformAnalyticsCreate) createSpec() (*PlatformAnalytics, *sqlgraph.C
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.PlatformAnalytics.Create().
+//		SetCreatedAt(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.PlatformAnalyticsUpsert) {
+//			SetCreatedAt(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *PlatformAnalyticsCreate) OnConflict(opts ...sql.ConflictOption) *PlatformAnalyticsUpsertOne {
+	_c.conflict = opts
+	return &PlatformAnalyticsUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.PlatformAnalytics.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *PlatformAnalyticsCreate) OnConflictColumns(columns ...string) *PlatformAnalyticsUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &PlatformAnalyticsUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// PlatformAnalyticsUpsertOne is the builder for "upsert"-ing
+	//  one PlatformAnalytics node.
+	PlatformAnalyticsUpsertOne struct {
+		create *PlatformAnalyticsCreate
+	}
+
+	// PlatformAnalyticsUpsert is the "OnConflict" setter.
+	PlatformAnalyticsUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *PlatformAnalyticsUpsert) SetUpdatedAt(v time.Time) *PlatformAnalyticsUpsert {
+	u.Set(platformanalytics.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *PlatformAnalyticsUpsert) UpdateUpdatedAt() *PlatformAnalyticsUpsert {
+	u.SetExcluded(platformanalytics.FieldUpdatedAt)
+	return u
+}
+
+// SetNewRegistrations sets the "new_registrations" field.
+func (u *PlatformAnalyticsUpsert) SetNewRegistrations(v int) *PlatformAnalyticsUpsert {
+	u.Set(platformanalytics.FieldNewRegistrations, v)
+	return u
+}
+
+// UpdateNewRegistrations sets the "new_registrations" field to the value that was provided on create.
+func (u *PlatformAnalyticsUpsert) UpdateNewRegistrations() *PlatformAnalyticsUpsert {
+	u.SetExcluded(platformanalytics.FieldNewRegistrations)
+	return u
+}
+
+// AddNewRegistrations adds v to the "new_registrations" field.
+func (u *PlatformAnalyticsUpsert) AddNewRegistrations(v int) *PlatformAnalyticsUpsert {
+	u.Add(platformanalytics.FieldNewRegistrations, v)
+	return u
+}
+
+// SetCompletedTests sets the "completed_tests" field.
+func (u *PlatformAnalyticsUpsert) SetCompletedTests(v int) *PlatformAnalyticsUpsert {
+	u.Set(platformanalytics.FieldCompletedTests, v)
+	return u
+}
+
+// UpdateCompletedTests sets the "completed_tests" field to the value that was provided on create.
+func (u *PlatformAnalyticsUpsert) UpdateCompletedTests() *PlatformAnalyticsUpsert {
+	u.SetExcluded(platformanalytics.FieldCompletedTests)
+	return u
+}
+
+// AddCompletedTests adds v to the "completed_tests" field.
+func (u *PlatformAnalyticsUpsert) AddCompletedTests(v int) *PlatformAnalyticsUpsert {
+	u.Add(platformanalytics.FieldCompletedTests, v)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create except the ID field.
+// Using this option is equivalent to using:
+//
+//	client.PlatformAnalytics.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//			sql.ResolveWith(func(u *sql.UpdateSet) {
+//				u.SetIgnore(platformanalytics.FieldID)
+//			}),
+//		).
+//		Exec(ctx)
+func (u *PlatformAnalyticsUpsertOne) UpdateNewValues() *PlatformAnalyticsUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		if _, exists := u.create.mutation.ID(); exists {
+			s.SetIgnore(platformanalytics.FieldID)
+		}
+		if _, exists := u.create.mutation.CreatedAt(); exists {
+			s.SetIgnore(platformanalytics.FieldCreatedAt)
+		}
+		if _, exists := u.create.mutation.Date(); exists {
+			s.SetIgnore(platformanalytics.FieldDate)
+		}
+		if _, exists := u.create.mutation.TenantID(); exists {
+			s.SetIgnore(platformanalytics.FieldTenantID)
+		}
+	}))
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.PlatformAnalytics.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *PlatformAnalyticsUpsertOne) Ignore() *PlatformAnalyticsUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *PlatformAnalyticsUpsertOne) DoNothing() *PlatformAnalyticsUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the PlatformAnalyticsCreate.OnConflict
+// documentation for more info.
+func (u *PlatformAnalyticsUpsertOne) Update(set func(*PlatformAnalyticsUpsert)) *PlatformAnalyticsUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&PlatformAnalyticsUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *PlatformAnalyticsUpsertOne) SetUpdatedAt(v time.Time) *PlatformAnalyticsUpsertOne {
+	return u.Update(func(s *PlatformAnalyticsUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *PlatformAnalyticsUpsertOne) UpdateUpdatedAt() *PlatformAnalyticsUpsertOne {
+	return u.Update(func(s *PlatformAnalyticsUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// SetNewRegistrations sets the "new_registrations" field.
+func (u *PlatformAnalyticsUpsertOne) SetNewRegistrations(v int) *PlatformAnalyticsUpsertOne {
+	return u.Update(func(s *PlatformAnalyticsUpsert) {
+		s.SetNewRegistrations(v)
+	})
+}
+
+// AddNewRegistrations adds v to the "new_registrations" field.
+func (u *PlatformAnalyticsUpsertOne) AddNewRegistrations(v int) *PlatformAnalyticsUpsertOne {
+	return u.Update(func(s *PlatformAnalyticsUpsert) {
+		s.AddNewRegistrations(v)
+	})
+}
+
+// UpdateNewRegistrations sets the "new_registrations" field to the value that was provided on create.
+func (u *PlatformAnalyticsUpsertOne) UpdateNewRegistrations() *PlatformAnalyticsUpsertOne {
+	return u.Update(func(s *PlatformAnalyticsUpsert) {
+		s.UpdateNewRegistrations()
+	})
+}
+
+// SetCompletedTests sets the "completed_tests" field.
+func (u *PlatformAnalyticsUpsertOne) SetCompletedTests(v int) *PlatformAnalyticsUpsertOne {
+	return u.Update(func(s *PlatformAnalyticsUpsert) {
+		s.SetCompletedTests(v)
+	})
+}
+
+// AddCompletedTests adds v to the "completed_tests" field.
+func (u *PlatformAnalyticsUpsertOne) AddCompletedTests(v int) *PlatformAnalyticsUpsertOne {
+	return u.Update(func(s *PlatformAnalyticsUpsert) {
+		s.AddCompletedTests(v)
+	})
+}
+
+// UpdateCompletedTests sets the "completed_tests" field to the value that was provided on create.
+func (u *PlatformAnalyticsUpsertOne) UpdateCompletedTests() *PlatformAnalyticsUpsertOne {
+	return u.Update(func(s *PlatformAnalyticsUpsert) {
+		s.UpdateCompletedTests()
+	})
+}
+
+// Exec executes the query.
+func (u *PlatformAnalyticsUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for PlatformAnalyticsCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *PlatformAnalyticsUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *PlatformAnalyticsUpsertOne) ID(ctx context.Context) (id string, err error) {
+	if u.create.driver.Dialect() == dialect.MySQL {
+		// In case of "ON CONFLICT", there is no way to get back non-numeric ID
+		// fields from the database since MySQL does not support the RETURNING clause.
+		return id, errors.New("ent: PlatformAnalyticsUpsertOne.ID is not supported by MySQL driver. Use PlatformAnalyticsUpsertOne.Exec instead")
+	}
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *PlatformAnalyticsUpsertOne) IDX(ctx context.Context) string {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // PlatformAnalyticsCreateBulk is the builder for creating many PlatformAnalytics entities in bulk.
 type PlatformAnalyticsCreateBulk struct {
 	config
 	err      error
 	builders []*PlatformAnalyticsCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the PlatformAnalytics entities in the database.
@@ -297,6 +550,7 @@ func (_c *PlatformAnalyticsCreateBulk) Save(ctx context.Context) ([]*PlatformAna
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -343,6 +597,185 @@ func (_c *PlatformAnalyticsCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *PlatformAnalyticsCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.PlatformAnalytics.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.PlatformAnalyticsUpsert) {
+//			SetCreatedAt(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *PlatformAnalyticsCreateBulk) OnConflict(opts ...sql.ConflictOption) *PlatformAnalyticsUpsertBulk {
+	_c.conflict = opts
+	return &PlatformAnalyticsUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.PlatformAnalytics.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *PlatformAnalyticsCreateBulk) OnConflictColumns(columns ...string) *PlatformAnalyticsUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &PlatformAnalyticsUpsertBulk{
+		create: _c,
+	}
+}
+
+// PlatformAnalyticsUpsertBulk is the builder for "upsert"-ing
+// a bulk of PlatformAnalytics nodes.
+type PlatformAnalyticsUpsertBulk struct {
+	create *PlatformAnalyticsCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.PlatformAnalytics.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//			sql.ResolveWith(func(u *sql.UpdateSet) {
+//				u.SetIgnore(platformanalytics.FieldID)
+//			}),
+//		).
+//		Exec(ctx)
+func (u *PlatformAnalyticsUpsertBulk) UpdateNewValues() *PlatformAnalyticsUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		for _, b := range u.create.builders {
+			if _, exists := b.mutation.ID(); exists {
+				s.SetIgnore(platformanalytics.FieldID)
+			}
+			if _, exists := b.mutation.CreatedAt(); exists {
+				s.SetIgnore(platformanalytics.FieldCreatedAt)
+			}
+			if _, exists := b.mutation.Date(); exists {
+				s.SetIgnore(platformanalytics.FieldDate)
+			}
+			if _, exists := b.mutation.TenantID(); exists {
+				s.SetIgnore(platformanalytics.FieldTenantID)
+			}
+		}
+	}))
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.PlatformAnalytics.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *PlatformAnalyticsUpsertBulk) Ignore() *PlatformAnalyticsUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *PlatformAnalyticsUpsertBulk) DoNothing() *PlatformAnalyticsUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the PlatformAnalyticsCreateBulk.OnConflict
+// documentation for more info.
+func (u *PlatformAnalyticsUpsertBulk) Update(set func(*PlatformAnalyticsUpsert)) *PlatformAnalyticsUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&PlatformAnalyticsUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *PlatformAnalyticsUpsertBulk) SetUpdatedAt(v time.Time) *PlatformAnalyticsUpsertBulk {
+	return u.Update(func(s *PlatformAnalyticsUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *PlatformAnalyticsUpsertBulk) UpdateUpdatedAt() *PlatformAnalyticsUpsertBulk {
+	return u.Update(func(s *PlatformAnalyticsUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// SetNewRegistrations sets the "new_registrations" field.
+func (u *PlatformAnalyticsUpsertBulk) SetNewRegistrations(v int) *PlatformAnalyticsUpsertBulk {
+	return u.Update(func(s *PlatformAnalyticsUpsert) {
+		s.SetNewRegistrations(v)
+	})
+}
+
+// AddNewRegistrations adds v to the "new_registrations" field.
+func (u *PlatformAnalyticsUpsertBulk) AddNewRegistrations(v int) *PlatformAnalyticsUpsertBulk {
+	return u.Update(func(s *PlatformAnalyticsUpsert) {
+		s.AddNewRegistrations(v)
+	})
+}
+
+// UpdateNewRegistrations sets the "new_registrations" field to the value that was provided on create.
+func (u *PlatformAnalyticsUpsertBulk) UpdateNewRegistrations() *PlatformAnalyticsUpsertBulk {
+	return u.Update(func(s *PlatformAnalyticsUpsert) {
+		s.UpdateNewRegistrations()
+	})
+}
+
+// SetCompletedTests sets the "completed_tests" field.
+func (u *PlatformAnalyticsUpsertBulk) SetCompletedTests(v int) *PlatformAnalyticsUpsertBulk {
+	return u.Update(func(s *PlatformAnalyticsUpsert) {
+		s.SetCompletedTests(v)
+	})
+}
+
+// AddCompletedTests adds v to the "completed_tests" field.
+func (u *PlatformAnalyticsUpsertBulk) AddCompletedTests(v int) *PlatformAnalyticsUpsertBulk {
+	return u.Update(func(s *PlatformAnalyticsUpsert) {
+		s.AddCompletedTests(v)
+	})
+}
+
+// UpdateCompletedTests sets the "completed_tests" field to the value that was provided on create.
+func (u *PlatformAnalyticsUpsertBulk) UpdateCompletedTests() *PlatformAnalyticsUpsertBulk {
+	return u.Update(func(s *PlatformAnalyticsUpsert) {
+		s.UpdateCompletedTests()
+	})
+}
+
+// Exec executes the query.
+func (u *PlatformAnalyticsUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the PlatformAnalyticsCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for PlatformAnalyticsCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *PlatformAnalyticsUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

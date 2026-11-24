@@ -16,12 +16,12 @@ import {
 import { FileUp, KeyRound, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { useFileUrl } from "#/features/app/file/use-file-url";
+import { UserAvatar } from "#/features/app/user/user-avatar";
 import { m } from "#/paraglide/messages";
 import { getTextDirection } from "#/paraglide/runtime";
 import type { DeptNode, OperationCatalog, UserDraft } from "../types";
 import { GrantPreview } from "./grant-preview";
 import { RoleCards } from "./role-cards";
-import { UserAvatar } from "./user-avatar";
 
 const PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
 
@@ -60,6 +60,7 @@ export function UserDrawer({
   mode,
   user,
   roles,
+
   deptTree,
   catalog,
   selected,
@@ -76,20 +77,20 @@ export function UserDrawer({
   onSave,
   onResetPassword,
 }: Readonly<UserDrawerProps>) {
-  const [form] = Form.useForm<{ email: string; deptId?: string }>();
+  const [form] = Form.useForm<{ account: string; deptId?: string }>();
   const [password, setPassword] = useState(generatePassword);
   const [avatarId, setAvatarId] = useState<string | undefined>(user?.avatar);
   const previewUrl = useFileUrl(avatarId);
   const initialValues =
     mode === "edit"
-      ? { email: user?.email ?? "", deptId: user?.deptId ?? undefined }
-      : { email: "", deptId: undefined };
+      ? { account: user?.account ?? "", deptId: user?.deptId ?? undefined }
+      : { account: "", deptId: undefined };
 
   const handleSave = async () => {
     try {
       const values = await form.validateFields();
       onSave({
-        email: values.email,
+        account: values.account,
         password,
         deptId: values.deptId,
         roles: selected,
@@ -132,25 +133,22 @@ export function UserDrawer({
           label={
             mode === "edit" ? (
               <>
-                {m.system_users_form_email()}
-                <span className="ms-1.5 font-normal text-[11px] text-ink-tertiary">
-                  {m.system_users_form_email_hint()}
+                {m.system_users_form_account()}
+                <span className="text-ink-tertiary ms-1.5 text-[11px] font-normal">
+                  {m.system_users_form_account_hint()}
                 </span>
               </>
             ) : (
-              m.system_users_form_email()
+              m.system_users_form_account()
             )
           }
-          name="email"
-          rules={[
-            { required: true, message: m.system_users_form_email_required() },
-            { type: "email", message: m.system_users_form_email_invalid() },
-          ]}
+          name="account"
+          rules={[{ required: true, message: m.system_users_form_account_required() }]}
         >
           <Input
             disabled={mode === "edit"}
             maxLength={128}
-            placeholder={m.system_users_ph_email()}
+            placeholder={m.system_users_ph_account()}
             showCount
           />
         </Form.Item>
@@ -158,7 +156,7 @@ export function UserDrawer({
           <Form.Item label={m.system_users_form_password()} required>
             <div className="flex items-center gap-2">
               <Typography.Text
-                className="flex min-h-8 flex-1 items-center rounded-md border border-line-soft bg-fill-quaternary px-3 font-mono text-[13px]"
+                className="border-line-soft bg-fill-quaternary flex min-h-8 flex-1 items-center rounded-md border px-3 font-mono text-[13px]"
                 copyable={{ text: password, tooltips: m.system_users_password_copy() }}
               >
                 {password}
@@ -177,7 +175,7 @@ export function UserDrawer({
         )}
         <Form.Item label={m.system_users_form_avatar()}>
           <div className="flex items-center gap-3">
-            <UserAvatar email={user?.email ?? ""} size={48} url={previewUrl} />
+            <UserAvatar account={user?.account ?? ""} size={48} url={previewUrl} />
             <Upload
               beforeUpload={(file) => {
                 void onUploadAvatar(file).then((f) => {
@@ -216,7 +214,7 @@ export function UserDrawer({
       {mode === "edit" && (
         <div className="mb-4 flex flex-col gap-2">
           <div className="flex items-baseline gap-1">
-            <span className="font-medium text-[13px]">{m.system_users_credentials_title()}</span>
+            <span className="text-[13px] font-medium">{m.system_users_credentials_title()}</span>
             {resetResult !== null && (
               <Typography.Text className="text-[12px]" type="danger">
                 {m.system_users_reset_done_hint()}
@@ -226,7 +224,7 @@ export function UserDrawer({
           {resetResult !== null ? (
             <div className="flex items-center gap-2">
               <Typography.Text
-                className="flex min-h-8 flex-1 items-center rounded-md border border-line-soft bg-fill-quaternary px-3 font-mono text-[13px]"
+                className="border-line-soft bg-fill-quaternary flex min-h-8 flex-1 items-center rounded-md border px-3 font-mono text-[13px]"
                 copyable={{ text: resetResult, tooltips: m.system_users_password_copy() }}
               >
                 {resetResult}
@@ -252,14 +250,14 @@ export function UserDrawer({
           )}
         </div>
       )}
-      <div className="mb-2 font-medium text-[13px]">{m.system_users_form_roles()}</div>
+      <div className="mb-2 text-[13px] font-medium">{m.system_users_form_roles()}</div>
       <RoleCards onChange={onSelectionChange} roles={roles} selected={selected} />
       <div className="mt-4 flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <span className="font-medium text-[13px]">{m.system_users_preview_title()}</span>
+          <span className="text-[13px] font-medium">{m.system_users_preview_title()}</span>
           {mode === "edit" && user?.id && (
             <Link
-              className="text-[13px] text-primary"
+              className="text-primary text-[13px]"
               search={{ userId: user.id }}
               to="/dashboard/system/diag"
             >

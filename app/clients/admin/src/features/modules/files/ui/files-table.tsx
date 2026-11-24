@@ -1,10 +1,10 @@
 import type { File as FileView } from "@cyber-ecosystem/gen-connect-ts/cyber/system/v1/file_pb";
 import { DataTable, useColumns } from "@cyber-ecosystem/shared-antd/table";
 import type { TablePaginationConfig, TableProps } from "antd";
-import { Button, Popconfirm, Progress, Tag, Tooltip } from "antd";
-import { RotateCw, X } from "lucide-react";
+import { Progress, Tag } from "antd";
+import { Eye, Pencil, RotateCw, Trash, X } from "lucide-react";
 import type { ReactNode } from "react";
-import { isPreviewable } from "#/features/app/file/is-previewable";
+import { ActionIconButton } from "#/components/action-icon-button";
 import { useFileUrls } from "#/features/app/file/use-file-url";
 import type { UploadProgress } from "#/features/app/file/use-upload";
 import { UserDeletedTag } from "#/features/app/user/user-deleted-tag";
@@ -34,13 +34,13 @@ function fileStatus(file: FileView): FileStatusView {
 function statusTag(status: FileStatusView) {
   switch (status) {
     case "confirmed":
-      return <Tag color="success">{m.files_status_confirmed()}</Tag>;
+      return <Tag color="success">{m.files_list_status_confirmed()}</Tag>;
     case "processing":
-      return <Tag color="processing">{m.files_status_processing()}</Tag>;
+      return <Tag color="processing">{m.files_list_status_processing()}</Tag>;
     case "failed":
-      return <Tag color="error">{m.files_status_failed()}</Tag>;
+      return <Tag color="error">{m.files_list_status_failed()}</Tag>;
     default:
-      return <Tag>{m.files_status_uploading()}</Tag>;
+      return <Tag>{m.files_list_status_uploading()}</Tag>;
   }
 }
 
@@ -51,14 +51,15 @@ const SOURCE_COLORS: Record<string, string> = {
 
 function sourceLabel(source: string): string {
   if (source === "FILE_SOURCE_SERVER_GENERATED") {
-    return m.files_source_server();
+    return m.files_list_source_server();
   }
-  return m.files_source_client();
+  return m.files_list_source_client();
 }
 
 interface FilesTableProps {
   files: FileView[];
   loading: boolean;
+  meId: string;
   pagination: TablePaginationConfig;
   emptyDescription: string;
   ownerName: (id: string) => string | undefined;
@@ -77,6 +78,7 @@ interface FilesTableProps {
 export function FilesTable({
   files,
   loading,
+  meId,
   pagination,
   emptyDescription,
   ownerName,
@@ -100,48 +102,35 @@ export function FilesTable({
   );
 
   const renderCancel = (file: FileView) => (
-    <Popconfirm
-      cancelButtonProps={{ variant: "filled", color: "default" }}
-      okButtonProps={{ variant: "filled", color: "danger" }}
-      onConfirm={() => onAbort(file)}
-      title={m.files_abort_confirm()}
-    >
-      <Tooltip title={m.common_cancel()}>
-        <span className="inline-flex">
-          <Button
-            aria-label={m.common_cancel()}
-            color="danger"
-            disabled={pendingAbortId === (file.id ?? "")}
-            icon={<X size={14} />}
-            size="small"
-            variant="text"
-          />
-        </span>
-      </Tooltip>
-    </Popconfirm>
+    <ActionIconButton
+      confirm={{ onConfirm: () => onAbort(file), title: m.files_list_abort_confirm() }}
+      disabled={pendingAbortId === (file.id ?? "")}
+      icon={X}
+      label={m.common_cancel()}
+    />
   );
 
   const columns: TableProps<FileView>["columns"] = [
     {
-      title: () => m.files_col_name(),
+      title: () => m.files_list_col_name(),
       dataIndex: "name",
       render: (_, file) => <span className="font-medium">{file.name}</span>,
     },
     {
-      title: () => m.files_col_type(),
+      title: () => m.files_list_col_type(),
       dataIndex: "contentType",
       width: 170,
       render: (_, file) => <Tag>{file.contentType || "-"}</Tag>,
     },
     {
-      title: () => m.files_col_size(),
+      title: () => m.files_list_col_size(),
       dataIndex: "size",
       width: 110,
       align: getTextDirection() === "rtl" ? "left" : "right",
       render: (_, file) => formatSize(Number(file.size ?? 0)),
     },
     {
-      title: () => m.files_col_source(),
+      title: () => m.files_list_col_source(),
       dataIndex: "source",
       width: 130,
       render: (_, file) => (
@@ -151,14 +140,14 @@ export function FilesTable({
       ),
     },
     {
-      title: () => m.files_col_status(),
+      title: () => m.files_list_col_status(),
       dataIndex: "status",
       width: 110,
       render: (_, file) => statusTag(fileStatus(file)),
     },
     {
       key: "progress",
-      title: () => m.files_col_progress(),
+      title: () => m.files_list_col_progress(),
       width: 220,
       render: (_, file) => {
         const status = fileStatus(file);
@@ -171,44 +160,40 @@ export function FilesTable({
         if (status === "failed") {
           return <Progress percent={100} showInfo={false} size="small" status="exception" />;
         }
+        if (file.ownerId !== meId) {
+          return null;
+        }
         const p = progressById[file.id ?? ""];
         const pct = p && p.total > 0 ? Math.min(100, Math.floor((p.loaded / p.total) * 100)) : 0;
         return (
           <div className="flex items-center gap-2">
             {p ? <Progress percent={pct} size="small" /> : <UploadProbe file={file} />}
-            <Tooltip title={m.files_act_resume()}>
-              <span className="inline-flex">
-                <Button
-                  aria-label={m.files_act_resume()}
-                  color="primary"
-                  disabled={Boolean(p)}
-                  icon={<RotateCw size={14} />}
-                  onClick={() => onResume(file)}
-                  size="small"
-                  variant="text"
-                />
-              </span>
-            </Tooltip>
+            <ActionIconButton
+              disabled={Boolean(p)}
+              icon={RotateCw}
+              label={m.files_list_act_resume()}
+              onClick={() => onResume(file)}
+            />
             {renderCancel(file)}
           </div>
         );
       },
     },
     {
-      title: () => m.files_col_owner(),
+      title: () => m.files_list_col_owner(),
       dataIndex: "ownerId",
       width: 200,
       render: (_, file) => {
         const view = userRefView(file.ownerId, ownerName, ownerKnown);
         if (view.kind === "known") {
-          return <span>{view.email}</span>;
+          return <span>{view.account}</span>;
         }
         if (view.kind === "raw") {
           return (
             <span className="inline-flex min-w-0 items-center gap-1">
               <span
                 className={
-                  view.deleted ? "font-mono text-[12px]" : "font-mono text-[12px] text-ink-tertiary"
+                  view.deleted ? "font-mono text-[12px]" : "text-ink-tertiary font-mono text-[12px]"
                 }
               >
                 {view.id}
@@ -222,7 +207,7 @@ export function FilesTable({
     },
     {
       ...fieldTimestamp<FileView>("createdAt", {
-        title: m.files_col_created(),
+        title: m.files_list_col_created(),
         format: { time: "second" },
       }),
       width: 180,
@@ -235,42 +220,29 @@ export function FilesTable({
         const url = confirmed ? urls.get(file.id ?? "") : undefined;
         return (
           <div className="flex items-center gap-1">
-            <Button
-              color="primary"
+            <ActionIconButton
               disabled={!url}
               href={url}
+              icon={Eye}
+              label={m.files_list_act_preview()}
               rel="noreferrer"
-              size="small"
               target="_blank"
-              variant="text"
-            >
-              {isPreviewable(file.contentType ?? "")
-                ? m.files_act_preview()
-                : m.files_act_preview()}
-            </Button>
-            <Button color="primary" onClick={() => onRename(file)} size="small" variant="text">
-              {m.files_act_rename()}
-            </Button>
-            <Popconfirm
-              cancelButtonProps={{ variant: "filled", color: "default" }}
-              okButtonProps={{ variant: "filled", color: "danger" }}
-              onConfirm={() => onDelete(file)}
-              placement={getTextDirection() === "rtl" ? "right" : "left"}
-              title={m.files_delete_confirm()}
-            >
-              <Button
-                color="danger"
-                disabled={!deletable || pendingDeleteId === (file.id ?? "")}
-                size="small"
-                variant="text"
-              >
-                {m.files_act_delete()}
-              </Button>
-            </Popconfirm>
+            />
+            <ActionIconButton
+              icon={Pencil}
+              label={m.files_list_act_rename()}
+              onClick={() => onRename(file)}
+            />
+            <ActionIconButton
+              confirm={{ onConfirm: () => onDelete(file), title: m.files_list_delete_confirm() }}
+              disabled={!deletable || pendingDeleteId === (file.id ?? "")}
+              icon={Trash}
+              label={m.files_list_act_delete()}
+            />
           </div>
         );
       },
-      { title: m.files_col_actions() },
+      { title: m.files_list_col_actions() },
     ),
   ];
 

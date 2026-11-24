@@ -1,118 +1,43 @@
 # Cyber Ecosystem
 
-## 1) Scope
-
-Root-level rules only. Applies to the entire monorepo and to every contributor — human or coding agent.
-
-`MUST` / `MUST NOT` = hard requirement. `SHOULD` = strong default. `MAY` = optional.
-
-Stack-specific and service-specific details belong in local documents under the owning directory, not here.
-
-This file is the canonical root-rules source; `CLAUDE.md` is a Claude Code import shell pointing here.
-
----
-
-## 2) Repository Overview
-
-Monorepo for the Cyber Ecosystem platform — a **generic development skeleton**, not a vertical product: one shared base, business apps fork and grow on top. Protobuf contracts (`proto/`) are the source of truth; generated code (`gen/`) is derived output — never edit directly.
+Monorepo for the Cyber Ecosystem platform — a **generic development skeleton**: one shared base, business apps grow on top. Protobuf contracts (`proto/`) are the source of truth; `gen/` is derived output, never hand-edited.
 
 | Path | Holds |
 |---|---|
-| `proto/` | Protobuf contracts — the source of truth |
-| `gen/` | Generated code (Go, connect-ts, OpenAPI) — derived, never hand-edited |
-| `app/services/<name>/` | Kratos Go services; `system` = the mandatory base service (IAM + platform analytics) |
+| `proto/` | protobuf contracts — the source of truth |
+| `gen/` | generated code (Go, connect-ts, OpenAPI) — derived |
+| `app/services/<name>/` | Kratos Go services; `system` = the mandatory base (IAM + platform analytics) |
 | `app/clients/<name>/` | TanStack Start web clients (`admin`) |
-| `shared-go/` | Cross-service Go capabilities (transport, security, capability facades) |
-| `shared-ts/` | Cross-client TS capabilities (error, antd, theme, store, cookie, router-progress, storybook) |
-| `deploy/` | Compose stacks, traefik edge, migration wiring |
-| `tools/` | Repo bootstrap & tooling Nx targets |
-| `docs/` | Documentation — three lanes (§7) |
+| `shared-go/` / `shared-ts/` | cross-service capabilities — never business aggregates |
+| `deploy/` | compose stacks, edge, migration wiring |
+| `tools/` | repo bootstrap and tooling targets |
 
----
+## Hard laws
 
-## 3) Running Commands — MUST Use Nx
+1. **Workflows run through Nx** — `./nx run <project>:<target>`; every valid target is declared in the project's `project.json`. A workflow with no target gets one added, never an ad-hoc command.
+2. **pnpm is the only package manager.** A `package-lock.json` or `yarn.lock` anywhere means a command bypassed pnpm — delete the artifact, fix the command.
+3. **Never hand-edit `gen/`.** Fix the source or generator and regenerate (proto conventions §7).
+4. **No cross-service code dependencies.** Cross-service reads go through the owning service's RPCs, behind a `<Remote>RP` ACL adapter (kratos conventions §5); capability packages stay self-contained (kratos conventions §1).
+5. **No secrets or environment topology in code** — endpoints and keys are deploy-plane facts (deploy conventions §6).
 
-`MUST` use Nx for all workflows that have declared targets:
+## Working contract
 
-```bash
-./nx run <project>:<target>
-```
+- **Read before write.** Each convention opens with a read map: the artifact you are about to touch names the sections that are its law. Read those sections — the text itself, not your memory of it.
+- **Structural actions verify first.** Branch, commit, mirror, delete: check the standing law before acting, not after.
+- **Gaps are questions.** Where no law speaks, or the call is an author's rather than a mechanic's, stop and ask. A choice you cannot trace to a law line is a question, not a decision.
+- **Decisions carry a checkable source.** A decision that shapes user-visible behavior names where it comes from — a ruling id, a spec line, a prototype frame, a legacy anchor. "The spec says" without a line the reader can open is a derivation awaiting a ruling, not a decision.
 
-**How to find targets:** Read the project's `project.json` — every valid target is declared there. Do not assume a target exists. For JS/TS packages, Nx also picks up **every script in `package.json` as a runnable target** (`./nx run <pkg>:<script>`) — check `package.json` scripts before concluding a workflow has no target.
+## Documentation economy
 
-Recurring build, test, lint, generation, dev, and automation workflows `SHOULD` be exposed through Nx targets. If a needed workflow has no target yet, add one to `project.json` instead of running ad-hoc commands.
+These docs are read by coding agents whose context is finite and billed: every line costs every future session. Write for injection cost — shortest text that loses no information; structure that finds the law in one lookup (readable section names, stable anchors); splits when a file serves more than one reading occasion (a rule nobody reads on this occasion does not belong here). File names and section titles are the index agents navigate by — they state the artifact, not the history.
 
----
-
-## 4) Hard Rules
-
-**DO NOT bypass Nx** with direct toolchain commands (e.g. `buf generate`, `go generate`, `go build`) for workflows that have Nx targets.
-
-**DO NOT manually edit generated files.** Fix the source or generator, then regenerate via the owning Nx target.
-
-**DO NOT introduce cross-service dependencies.** Move shared capability into `shared-go/` instead.
-
-**DO NOT couple `shared-go/capability` to the rest of the repo.** A capability package depends only on stdlib, its third-party providers, and its own capability family (the parent interface package — `mq/pg` → `mq`); never on `utils`, `kratos`, `orm`, or any other shared-go package — a family copies out as a unit. In-package substitutes: `encoding/json` directly; explicit bounds guards (clamp above `math.MaxInt32`, then convert) instead of `ConvNum`.
-
-**DO NOT hardcode secrets or environment-specific credentials.**
-
----
-
-## 5) Source-First Workflow
-
-1. Edit the source definition (`.proto`, generator config, etc.)
-2. Run the relevant Nx generation target
-3. Review the generated diff — exclude unintended churn
-4. If output changes unexpectedly, fix the source or generation flow
-
-For cross-project changes: stabilize shared contracts first → update implementations → regenerate.
-
----
-
-## 6) Validation — Definition of Done
-
-Before closing any change:
-
-1. Relevant Nx generation targets were run when required.
-2. Touched projects were validated with declared Nx targets.
-3. If a needed validation step has no Nx target yet, note the gap explicitly.
-4. Generated outputs were reviewed; unrelated churn was excluded.
-5. Any skipped step or pre-existing failure is called out.
-6. Paradigm or mechanism changes: the owning `docs/conventions/<area>/CONVENTIONS.md` is updated and affected skill pointers are verified — `./nx run docs:check` is green.
-
----
-
-## 7) Documentation — Three Lanes
-
-Knowledge lives in three lanes; each kind of knowledge has exactly one home — durable rules (`docs/conventions/<area>/CONVENTIONS.md`, EN), procedural skill dispatchers (`.claude/skills/<name>/SKILL.md`, EN; trigger + pointers, never content), and a temporary, fully isolated working lane for active fronts (defined only in `docs/README.md`). Full governance law (admission, promotion, backfill, pointer discipline, instance-state, drift checks): `docs/README.md`.
-
-Lane rules:
-
-- `MUST` read the relevant `CONVENTIONS.md` before writing code in an area, and follow it exactly (structure, naming, ordering, comments, dependency rules).
-- `MUST NOT` duplicate content across lanes or into skills — pointers only. Rule text and step text live in docs; a skill body holds a trigger, pointers, and completion pointers.
-- `MUST NOT` reference roadmap content from here, `CLAUDE.md`, skills, or conventions — the working lane is temporary and fully isolated (law: `docs/README.md` §2.7); active fronts are introduced by the user, not by root docs.
-- Skills auto-trigger by description (Claude Code); any agent or human can read `.claude/skills/*/SKILL.md` as plain markdown.
-
-Area index — read before writing code in the area:
+## Conventions
 
 | Area | Doc | Read when |
 |---|---|---|
-| proto (contracts) | `docs/conventions/proto/CONVENTIONS.md` | touching any `.proto`, or code that consumes `gen/` |
+| proto (contracts) | `docs/conventions/proto/CONVENTIONS.md` | touching any `.proto`, or code consuming `gen/` |
 | kratos (Go services) | `docs/conventions/kratos/CONVENTIONS.md` | writing Go under `app/services/*` or `shared-go/` |
-| tanstack (web clients) | `docs/conventions/tanstack/CONVENTIONS.md` | writing code under `app/clients/*` |
-| deploy (containers & pipelines) | `docs/conventions/deploy/CONVENTIONS.md` | touching `deploy/`, Dockerfiles, compose, edge, migrations |
-
-Adding a new tech stack: create `docs/conventions/<area>/CONVENTIONS.md` **with the first real code of that stack** (not before), and add it to this index in the same change. Areas are tech stacks only — topic or domain rules live in the owning stack doc or here (§8), never in their own area directory.
-
----
-
-## 8) Multi-app composition
-
-One shared base, many business applications:
-
-- **`system` is the mandatory base service** every application deploys: authentication, user identity, org (dept), roles, authz engine, resource catalog, plus the **platform-level operational analytics** every application inherits for free — the cross-domain event ledger (`event_log`), invite graph (`user_referral`) and daily rollups (`platform_analytics`) behind the ops dashboard. Each application adds services under `app/services/<name>` with contracts under `proto/cyber/<name>/v1`, owning its aggregates end-to-end (schema, migrations, biz, RPC).
-- Cross-service reads at runtime go through the owning service's RPCs — from clients, or behind a `<Remote>RP` ACL adapter in the consuming service. Business services `MUST NOT` grow identity/auth concerns; those live in `system` and are shared by all apps.
-- **User split**: `system.User` is the authentication identity core only (credentials, org membership, role bindings). App-specific person data is the app's own domain aggregate keyed by `user_id` (plain id field), named by its domain concept (`Delegate`, `Operator`) — never `UserExt`-style field bags; own proto, own schema, logical reference only. A field enters `system.User` only when ≥2 applications genuinely need it. Reads hydrate identity via `system` RPCs — a missing profile degrades rendering, never breaks the row; each aggregate keeps a single write entrance. `system` cascades only what it owns; business profiles tolerate orphaning; cross-service invalidation events appear only on a second real consumer.
-- **Pluggable system surface**, cheapest tier first: permission gating by default (hide-by-default — an ungranted operation never surfaces) → config-level module registry when the API itself must be absent → code fork only when isolation physically forces it, and then as a delivery action, not a development structure.
-- **Composition & branching**: applications coexist as directories in one trunk; an application is a composition unit — deploy profiles select the service set, the client composes menu and skin per app. Per-app long-lived branches `SHOULD NOT` (every base fix would need cherry-picking across them); fork per app only at isolation-forced delivery time, as late as possible.
-- `shared-go` / `shared-ts` carry capabilities, never business aggregates; a pattern is promoted to shared only on its second real consumer.
+| tanstack (web clients) | `docs/conventions/tanstack/CONVENTIONS.md` | writing under `app/clients/*` or `shared-ts/` |
+| deploy (containers) | `docs/conventions/deploy/CONVENTIONS.md` | touching `deploy/`, Dockerfiles, compose, edge, migrations |
+| skin (antd presets) | `docs/conventions/skin/CONVENTIONS.md` | touching `shared-ts/antd/src/skin-presets/**` or authoring a skin |
+| browser-walkthrough (live verification) | `docs/conventions/browser-walkthrough/CONVENTIONS.md` | driving the browser loop — walkthroughs and live probes of web client surfaces |

@@ -7,14 +7,19 @@ import (
 	"cyber-ecosystem/app/services/system/internal/ent/auditexport"
 	"cyber-ecosystem/app/services/system/internal/ent/auditlog"
 	"cyber-ecosystem/app/services/system/internal/ent/authzpolicy"
+	"cyber-ecosystem/app/services/system/internal/ent/authzstamp"
+	"cyber-ecosystem/app/services/system/internal/ent/credential"
 	"cyber-ecosystem/app/services/system/internal/ent/dept"
 	"cyber-ecosystem/app/services/system/internal/ent/eventlog"
 	"cyber-ecosystem/app/services/system/internal/ent/file"
+	"cyber-ecosystem/app/services/system/internal/ent/membership"
 	"cyber-ecosystem/app/services/system/internal/ent/permission"
 	"cyber-ecosystem/app/services/system/internal/ent/permissionpolicy"
 	"cyber-ecosystem/app/services/system/internal/ent/platformanalytics"
+	"cyber-ecosystem/app/services/system/internal/ent/population"
 	"cyber-ecosystem/app/services/system/internal/ent/principalrole"
 	"cyber-ecosystem/app/services/system/internal/ent/role"
+	"cyber-ecosystem/app/services/system/internal/ent/tenant"
 	"cyber-ecosystem/app/services/system/internal/ent/user"
 	"cyber-ecosystem/app/services/system/internal/ent/userreferral"
 	"errors"
@@ -88,14 +93,19 @@ func checkColumn(t, c string) error {
 			auditexport.Table:       auditexport.ValidColumn,
 			auditlog.Table:          auditlog.ValidColumn,
 			authzpolicy.Table:       authzpolicy.ValidColumn,
+			authzstamp.Table:        authzstamp.ValidColumn,
+			credential.Table:        credential.ValidColumn,
 			dept.Table:              dept.ValidColumn,
 			eventlog.Table:          eventlog.ValidColumn,
 			file.Table:              file.ValidColumn,
+			membership.Table:        membership.ValidColumn,
 			permission.Table:        permission.ValidColumn,
 			permissionpolicy.Table:  permissionpolicy.ValidColumn,
 			platformanalytics.Table: platformanalytics.ValidColumn,
+			population.Table:        population.ValidColumn,
 			principalrole.Table:     principalrole.ValidColumn,
 			role.Table:              role.ValidColumn,
+			tenant.Table:            tenant.ValidColumn,
 			user.Table:              user.ValidColumn,
 			userreferral.Table:      userreferral.ValidColumn,
 		})

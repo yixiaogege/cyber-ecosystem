@@ -87,10 +87,10 @@ export function MetricCards({
         const body = (
           <>
             <div className="text-ink-secondary text-xs">{cardLabel(card.key)}</div>
-            <div className="mt-1 font-black text-[26px] text-primary tabular-nums leading-tight">
+            <div className="text-primary mt-1 text-[26px] leading-tight font-black tabular-nums">
               {fmt(Number(card.value))}
             </div>
-            <div className="mt-1 text-ink-tertiary text-xs">
+            <div className="text-ink-tertiary mt-1 text-xs">
               {sub ? `${sub} · ` : ""}
               {target
                 ? m.dashboard_overview_card_drill({ target: hint })

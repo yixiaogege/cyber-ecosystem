@@ -13,8 +13,6 @@ import (
 	"cyber-ecosystem/shared-go/utils"
 
 	systempb "cyber-ecosystem/gen/go/cyber/system/v1"
-
-	"cyber-ecosystem/app/services/system/internal/shared"
 )
 
 // Struct --------------------------------------------------------------------------------------------------------------
@@ -52,12 +50,14 @@ func (s *IntrospectService) VerifySession(ctx context.Context, in *systempb.Veri
 	if !ok {
 		return nil, kauthz.ErrMissingSubject
 	}
-	email, _ := subject.Extra[shared.ExtraEmail].(string)
+	account, _ := subject.Extra[security.ExtraAccount].(string)
 	return &systempb.VerifySessionResponse{
-		UserId:    utils.StringW(subject.UserID),
-		TenantId:  utils.StringW(subject.TenantID),
-		SessionId: utils.StringW(subject.SessionID),
-		Email:     utils.StringW(email),
+		UserId:     utils.StringW(subject.UserID),
+		TenantId:   utils.StringW(subject.TenantID),
+		SessionId:  utils.StringW(subject.SessionID),
+		Account:    utils.StringW(account),
+		Population: utils.StringW(subject.Population),
+		Plane:      utils.StringW(subject.Plane),
 	}, nil
 }
 

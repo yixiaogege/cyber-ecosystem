@@ -2,13 +2,16 @@ import type { AuditLog } from "@cyber-ecosystem/gen-connect-ts/cyber/system/v1/a
 import type { DataTableProps } from "@cyber-ecosystem/shared-antd/table";
 import { DataTable, useColumns } from "@cyber-ecosystem/shared-antd/table";
 import type { TablePaginationConfig, TableProps } from "antd";
-import { Button, Tag } from "antd";
+import { Tag } from "antd";
+import { Eye } from "lucide-react";
 import type { ReactNode } from "react";
+import { ActionIconButton } from "#/components/action-icon-button";
 import { UserDeletedTag } from "#/features/app/user/user-deleted-tag";
 import { userRefView } from "#/features/app/user/user-ref";
 import { m } from "#/paraglide/messages";
 import { getTextDirection } from "#/paraglide/runtime";
 import { DenyTag, StatusTag } from "./event-tags";
+import { dash } from "./format";
 import { Latency } from "./latency";
 
 interface AuditTableProps {
@@ -65,7 +68,7 @@ export function AuditTable({
             </span>
           );
         }
-        return <span>{view.email}</span>;
+        return <span>{view.account}</span>;
       },
     },
     {
@@ -125,15 +128,15 @@ export function AuditTable({
       title: () => m.system_audit_col_ip(),
       dataIndex: "ip",
       width: 150,
-      render: (_, event) => (
-        <span className="font-mono text-[12px]">{event.ip === "" ? "-" : event.ip}</span>
-      ),
+      render: (_, event) => <span className="font-mono text-[12px]">{dash(event.ip)}</span>,
     },
     fieldAction<AuditLog>(
       (_, event) => (
-        <Button color="primary" onClick={() => onDetail(event)} size="small" variant="text">
-          {m.system_audit_act_detail()}
-        </Button>
+        <ActionIconButton
+          icon={Eye}
+          label={m.system_audit_act_detail()}
+          onClick={() => onDetail(event)}
+        />
       ),
       { title: m.system_audit_col_action() },
     ),

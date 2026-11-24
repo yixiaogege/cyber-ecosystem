@@ -48,7 +48,7 @@ export function QuickLinks() {
         ) : (
           <span aria-disabled className={`${SHELL} text-ink-disabled`} key={link.key}>
             {link.label()}
-            <span className="rounded border border-line px-1 text-[9.5px]">
+            <span className="border-line rounded border px-1 text-[9.5px]">
               {m.dashboard_overview_link_out_of_scope()}
             </span>
           </span>

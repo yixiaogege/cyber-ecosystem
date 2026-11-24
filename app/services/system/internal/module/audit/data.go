@@ -23,7 +23,6 @@ import (
 )
 
 const (
-	topic         = "audit_log"
 	consumerGroup = "audit" // group identity; survives restarts — only a brand-new group replays
 )
 
@@ -35,15 +34,15 @@ type auditRP struct {
 }
 
 func NewAuditRP(logger *slog.Logger, p *platform.Platform) (AuditRP, func()) {
-	log := logger.With("module", "module/audit")
+	log := logger.With("module", "module/audit_rp")
 	rp := &auditRP{RP: shared.NewRP(log, p)}
 	emitter, stop := kaudit.NewEmitter(rp.publish, log)
 	rp.emitter = emitter
 	// Subscribe failure degrades to no persistence with a loud log — the
 	// service stays up; audit availability yields to service availability.
-	sub, err := p.GetMQ().Consumer.Subscribe(context.Background(), topic, consumerGroup, rp.handle)
+	sub, err := p.GetMQ().Consumer.Subscribe(context.Background(), kaudit.TopicLog, consumerGroup, rp.handle)
 	if err != nil {
-		log.Error("audit consumer subscribe failed; events are not being persisted", "topic", topic, "error", err)
+		log.Error("audit consumer subscribe failed; events are not being persisted", "topic", kaudit.TopicLog, "error", err)
 		return rp, stop
 	}
 	return rp, func() { _ = sub.Close(); stop() }
@@ -51,7 +50,7 @@ func NewAuditRP(logger *slog.Logger, p *platform.Platform) (AuditRP, func()) {
 
 // Method --------------------------------------------------------------------------------------------------------------
 
-func (rp *auditRP) ListAuditLogs(ctx context.Context, in *AuditListIn) (*AuditListOut, error) {
+func (rp *auditRP) ListAuditLogs(ctx context.Context, in *ListIn) (*ListOut, error) {
 	query := rp.Platform.GetClient(ctx).AuditLog.Query()
 	helper.Where(query, in.Tenant != "", func() predicate.AuditLog { return auditlog.TenantIn(in.Tenant, "") })
 	helper.Where(query, in.Actor != nil, func() predicate.AuditLog { return auditlog.ActorEQ(*in.Actor) })
@@ -71,7 +70,7 @@ func (rp *auditRP) ListAuditLogs(ctx context.Context, in *AuditListIn) (*AuditLi
 	helper.ApplyOrderBy(helper.ParseOrderBy(in.OrderBy), ent.Asc, ent.Desc, helper.FOMapping{
 		"createdAt": func(sel helper.SQLSelector) { query.Order(sel(auditlog.FieldCreatedAt)) },
 	})
-	total, offset, limit, err := shared.Paginate(ctx, query, in.PageRequest, helper.DefaultPageSizeMax)
+	total, offset, limit, err := helper.Paginate(ctx, query, in.PageRequest, helper.DefaultPageSizeMax)
 	if err != nil {
 		return nil, rp.Platform.HandleEntError(err)
 	}
@@ -79,7 +78,7 @@ func (rp *auditRP) ListAuditLogs(ctx context.Context, in *AuditListIn) (*AuditLi
 	if err != nil {
 		return nil, rp.Platform.HandleEntError(err)
 	}
-	return &AuditListOut{
+	return &ListOut{
 		PageResponse: helper.BuildPageResponse(total, offset, limit),
 		List:         utils.SliceMap(logs, mapAuditLog),
 	}, nil
@@ -104,7 +103,7 @@ func (rp *auditRP) ListExports(ctx context.Context, in *ExportListIn) (*ExportLi
 	helper.ApplyOrderBy(helper.ParseOrderBy(in.OrderBy), ent.Asc, ent.Desc, helper.FOMapping{
 		"createdAt": func(sel helper.SQLSelector) { query.Order(sel(auditexport.FieldCreatedAt)) },
 	})
-	total, offset, limit, err := shared.Paginate(ctx, query, in.PageRequest, helper.DefaultPageSizeUnlimit)
+	total, offset, limit, err := helper.Paginate(ctx, query, in.PageRequest, helper.DefaultPageSizeUnlimit)
 	if err != nil {
 		return nil, rp.Platform.HandleEntError(err)
 	}
@@ -181,13 +180,15 @@ func (rp *auditRP) publish(ctx context.Context, ev *kaudit.Event) error {
 		return err
 	}
 	msg := &mq.Message{
-		Topic:     topic,
+		Topic:     kaudit.TopicLog,
 		Payload:   payload,
 		Headers:   map[string]string{"event_id": xid.New().String()},
 		Timestamp: ev.OccurredAt,
 	}
-	_, err = rp.Platform.GetMQ().Publisher.Publish(ctx, topic, msg)
-	return err
+	if _, err = rp.Platform.GetMQ().Publisher.Publish(ctx, kaudit.TopicLog, msg); err != nil {
+		return rp.Platform.HandleMQError(err)
+	}
+	return nil
 }
 
 func (rp *auditRP) handle(ctx context.Context, msg mq.Message) error {

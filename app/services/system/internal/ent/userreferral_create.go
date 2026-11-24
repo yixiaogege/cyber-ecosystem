@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect"
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -18,6 +20,7 @@ type UserReferralCreate struct {
 	config
 	mutation *UserReferralMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetCreatedAt sets the "created_at" field.
@@ -235,6 +238,7 @@ func (_c *UserReferralCreate) createSpec() (*UserReferral, *sqlgraph.CreateSpec)
 		_node = &UserReferral{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(userreferral.Table, sqlgraph.NewFieldSpec(userreferral.FieldID, field.TypeString))
 	)
+	_spec.OnConflict = _c.conflict
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
@@ -266,11 +270,188 @@ func (_c *UserReferralCreate) createSpec() (*UserReferral, *sqlgraph.CreateSpec)
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.UserReferral.Create().
+//		SetCreatedAt(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.UserReferralUpsert) {
+//			SetCreatedAt(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *UserReferralCreate) OnConflict(opts ...sql.ConflictOption) *UserReferralUpsertOne {
+	_c.conflict = opts
+	return &UserReferralUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.UserReferral.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *UserReferralCreate) OnConflictColumns(columns ...string) *UserReferralUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &UserReferralUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// UserReferralUpsertOne is the builder for "upsert"-ing
+	//  one UserReferral node.
+	UserReferralUpsertOne struct {
+		create *UserReferralCreate
+	}
+
+	// UserReferralUpsert is the "OnConflict" setter.
+	UserReferralUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *UserReferralUpsert) SetUpdatedAt(v time.Time) *UserReferralUpsert {
+	u.Set(userreferral.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *UserReferralUpsert) UpdateUpdatedAt() *UserReferralUpsert {
+	u.SetExcluded(userreferral.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create except the ID field.
+// Using this option is equivalent to using:
+//
+//	client.UserReferral.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//			sql.ResolveWith(func(u *sql.UpdateSet) {
+//				u.SetIgnore(userreferral.FieldID)
+//			}),
+//		).
+//		Exec(ctx)
+func (u *UserReferralUpsertOne) UpdateNewValues() *UserReferralUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		if _, exists := u.create.mutation.ID(); exists {
+			s.SetIgnore(userreferral.FieldID)
+		}
+		if _, exists := u.create.mutation.CreatedAt(); exists {
+			s.SetIgnore(userreferral.FieldCreatedAt)
+		}
+		if _, exists := u.create.mutation.ReferrerID(); exists {
+			s.SetIgnore(userreferral.FieldReferrerID)
+		}
+		if _, exists := u.create.mutation.ReferrerName(); exists {
+			s.SetIgnore(userreferral.FieldReferrerName)
+		}
+		if _, exists := u.create.mutation.InviteeID(); exists {
+			s.SetIgnore(userreferral.FieldInviteeID)
+		}
+		if _, exists := u.create.mutation.TenantID(); exists {
+			s.SetIgnore(userreferral.FieldTenantID)
+		}
+	}))
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.UserReferral.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *UserReferralUpsertOne) Ignore() *UserReferralUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *UserReferralUpsertOne) DoNothing() *UserReferralUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the UserReferralCreate.OnConflict
+// documentation for more info.
+func (u *UserReferralUpsertOne) Update(set func(*UserReferralUpsert)) *UserReferralUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&UserReferralUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *UserReferralUpsertOne) SetUpdatedAt(v time.Time) *UserReferralUpsertOne {
+	return u.Update(func(s *UserReferralUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *UserReferralUpsertOne) UpdateUpdatedAt() *UserReferralUpsertOne {
+	return u.Update(func(s *UserReferralUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *UserReferralUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for UserReferralCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *UserReferralUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *UserReferralUpsertOne) ID(ctx context.Context) (id string, err error) {
+	if u.create.driver.Dialect() == dialect.MySQL {
+		// In case of "ON CONFLICT", there is no way to get back non-numeric ID
+		// fields from the database since MySQL does not support the RETURNING clause.
+		return id, errors.New("ent: UserReferralUpsertOne.ID is not supported by MySQL driver. Use UserReferralUpsertOne.Exec instead")
+	}
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *UserReferralUpsertOne) IDX(ctx context.Context) string {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // UserReferralCreateBulk is the builder for creating many UserReferral entities in bulk.
 type UserReferralCreateBulk struct {
 	config
 	err      error
 	builders []*UserReferralCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the UserReferral entities in the database.
@@ -300,6 +481,7 @@ func (_c *UserReferralCreateBulk) Save(ctx context.Context) ([]*UserReferral, er
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -346,6 +528,149 @@ func (_c *UserReferralCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *UserReferralCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.UserReferral.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.UserReferralUpsert) {
+//			SetCreatedAt(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *UserReferralCreateBulk) OnConflict(opts ...sql.ConflictOption) *UserReferralUpsertBulk {
+	_c.conflict = opts
+	return &UserReferralUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.UserReferral.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *UserReferralCreateBulk) OnConflictColumns(columns ...string) *UserReferralUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &UserReferralUpsertBulk{
+		create: _c,
+	}
+}
+
+// UserReferralUpsertBulk is the builder for "upsert"-ing
+// a bulk of UserReferral nodes.
+type UserReferralUpsertBulk struct {
+	create *UserReferralCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.UserReferral.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//			sql.ResolveWith(func(u *sql.UpdateSet) {
+//				u.SetIgnore(userreferral.FieldID)
+//			}),
+//		).
+//		Exec(ctx)
+func (u *UserReferralUpsertBulk) UpdateNewValues() *UserReferralUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		for _, b := range u.create.builders {
+			if _, exists := b.mutation.ID(); exists {
+				s.SetIgnore(userreferral.FieldID)
+			}
+			if _, exists := b.mutation.CreatedAt(); exists {
+				s.SetIgnore(userreferral.FieldCreatedAt)
+			}
+			if _, exists := b.mutation.ReferrerID(); exists {
+				s.SetIgnore(userreferral.FieldReferrerID)
+			}
+			if _, exists := b.mutation.ReferrerName(); exists {
+				s.SetIgnore(userreferral.FieldReferrerName)
+			}
+			if _, exists := b.mutation.InviteeID(); exists {
+				s.SetIgnore(userreferral.FieldInviteeID)
+			}
+			if _, exists := b.mutation.TenantID(); exists {
+				s.SetIgnore(userreferral.FieldTenantID)
+			}
+		}
+	}))
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.UserReferral.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *UserReferralUpsertBulk) Ignore() *UserReferralUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *UserReferralUpsertBulk) DoNothing() *UserReferralUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the UserReferralCreateBulk.OnConflict
+// documentation for more info.
+func (u *UserReferralUpsertBulk) Update(set func(*UserReferralUpsert)) *UserReferralUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&UserReferralUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *UserReferralUpsertBulk) SetUpdatedAt(v time.Time) *UserReferralUpsertBulk {
+	return u.Update(func(s *UserReferralUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *UserReferralUpsertBulk) UpdateUpdatedAt() *UserReferralUpsertBulk {
+	return u.Update(func(s *UserReferralUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *UserReferralUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the UserReferralCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for UserReferralCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *UserReferralUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

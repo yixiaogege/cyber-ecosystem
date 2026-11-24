@@ -18,12 +18,12 @@ import (
 	"cyber-ecosystem/app/services/system/internal/platform"
 )
 
-// 演示数据：只在 seed.demo = true（裸机 dev）时执行，容器部署默认关闭。
-// 上游业务域（测评 / 支付 / 用户画像）本轮不存在，因此这里按同一套日序列造出
-// 自洽的 event_log / user_referral / platform_analytics，让运营总览可用。
-// 关键约束：指标卡取自 event_log，趋势取自 platform_analytics，两者由同一条
-// 日序列生成，所以「新增注册」卡与趋势近 30 天合计必然相等。
 const (
+	// 演示数据：只在 seed.demo = true（裸机 dev）时执行，容器部署默认关闭。
+	// 上游业务域（测评 / 支付 / 用户画像）本轮不存在，因此这里按同一套日序列造出
+	// 自洽的 event_log / user_referral / platform_analytics，让运营总览可用。
+	// 关键约束：指标卡取自 event_log，趋势取自 platform_analytics，两者由同一条
+	// 日序列生成，所以「新增注册」卡与趋势近 30 天合计必然相等。
 	demoSeed      = 20261007 // 固定随机源，同一份数据每次启动都一样
 	rollupDays    = 1200     // platform_analytics 覆盖 3 年 + 余量（趋势年视图取 3 年）
 	eventDays     = 30       // event_log 只写最长窗口（30 天）内
@@ -36,17 +36,19 @@ const (
 	organicSkip   = 0.5 // 自然流量被抽中后丢弃的概率 → 被邀人群的分母质量更高
 )
 
-// 漏斗相邻阶段比率（完成测评 → 打开能力报告 → 查看报告中心 → 发起分享 → 注册会员/解锁）。
-var funnelRates = []float64{0.764, 0.500, 0.702, 0.636}
+var funnelRates = []float64{
+	// 漏斗相邻阶段比率（完成测评 → 打开能力报告 → 查看报告中心 → 发起分享 → 注册会员/解锁）。
+	0.764, 0.500, 0.702, 0.636,
+}
 
-// 邀请人昵称池：referrer_name 是邀请时刻的展示名快照。
 var inviterNames = []string{
+	// 邀请人昵称池：referrer_name 是邀请时刻的展示名快照。
 	"龘好久", "选手乙", "王小明", "陆明明", "赵一鸣", "阿强", "萌新丁", "路人丙",
 	"林小北", "陈默", "周野", "苏念", "何一鸣", "郑好", "黄小满", "夏至",
 }
 
-// 最近动态的事件文案：event_log.props.text 是日志原文，前端只翻译类型标签。
 var eventTexts = map[string]string{
+	// 最近动态的事件文案：event_log.props.text 是日志原文，前端只翻译类型标签。
 	"member_activate": "开通会员 31 天",
 	"pay_success":     "解锁 认知报告（单次）",
 	"unlock_success":  "解锁 能力报告",
@@ -104,8 +106,8 @@ func (s *DemoSeed) Run(ctx context.Context) error {
 
 // Private -------------------------------------------------------------------------------------------------------------
 
-// demoDay 是一条日序列：指标卡与趋势共用同一份来源，因此两边必然一致。
 type demoDay struct {
+	// 一条日序列：指标卡与趋势共用同一份来源，因此两边必然一致。
 	dayAgo int
 	date   time.Time
 	regs   int64
@@ -139,10 +141,10 @@ func (s *DemoSeed) seedRollups(ctx context.Context, client *ent.Client, tenant s
 	return nil
 }
 
-// demoUser 是窗口内的一个人：id 取自 xid（与 ent 主键同构），dayAgo 为注册日。
-// 演示数据不复用 system.User：本种子要能独立成形（超管账户由 IAM seed 负责），
-// user_id 因此只是逻辑引用，不建外键。
 type demoUser struct {
+	// 窗口内的一个人：id 取自 xid（与 ent 主键同构），dayAgo 为注册日。
+	// 演示数据不复用 system.User：本种子要能独立成形（超管账户由 IAM seed 负责），
+	// user_id 因此只是逻辑引用，不建外键。
 	id     string
 	dayAgo int
 	name   string // 仅在本人成为邀请人时赋值（referrer_name 快照）
@@ -161,22 +163,24 @@ func buildRoster(days []*demoDay) []*demoUser {
 	return out
 }
 
-// demoEdge 是一条邀请关系；level 由 referrer 的层级推出（1 级 = 邀请人本身无人邀请）。
 type demoEdge struct {
+	// 一条邀请关系；level 由 referrer 的层级推出（1 级 = 邀请人本身无人邀请）。
 	referrer *demoUser
 	invitee  *demoUser
 	at       time.Time
 }
 
-// levelWeights 是目标裂变层级分布（1 级 65% / 2 级 24% / 3 级 9% / 4 级+ 2%），
-// 对齐 manage 演示值的金字塔形状：层级由 referrer 自身的层级决定，因此聚合时
-// 用 referrer_id 链上溯算出的深度与这里赋值的一致。
-var levelWeights = []float64{0.65, 0.24, 0.09, 0.02}
+var levelWeights = []float64{
+	// 目标裂变层级分布（1 级 65% / 2 级 24% / 3 级 9% / 4 级+ 2%），
+	// 对齐 manage 演示值的金字塔形状：层级由 referrer 自身的层级决定，因此聚合时
+	// 用 referrer_id 链上溯算出的深度与这里赋值的一致。
+	0.65, 0.24, 0.09, 0.02,
+}
 
-// buildReferrals 按天造边（dayAgo 从大到小）：被邀人是当天注册队列里的一员
-// （邀请 → 当天注册），referrer 只从「注册更早且层级正好低一级」的人里挑，
-// 于是层级天然形成金字塔，且不会出现环。
 func buildReferrals(rng *rand.Rand, days []*demoDay, roster []*demoUser) []*demoEdge {
+	// 按天造边（dayAgo 从大到小）：被邀人是当天注册队列里的一员
+	// （邀请 → 当天注册），referrer 只从「注册更早且层级正好低一级」的人里挑，
+	// 于是层级天然形成金字塔，且不会出现环。
 	byDay := make(map[int][]*demoUser, eventDays)
 	for _, u := range roster {
 		byDay[u.dayAgo] = append(byDay[u.dayAgo], u)
@@ -232,9 +236,9 @@ func rollLevel(rng *rand.Rand) int32 {
 	return int32(len(levelWeights))
 }
 
-// pickReferrer 用平方偏置抽取：少数人贡献多数邀请，于是「去重邀请人数」远小于
-// 「邀请关系数」（真实裂变的长尾），同时 80% 的邀请落在还没邀请过人的候选上。
 func pickReferrer(rng *rand.Rand, pool []*demoUser, picked map[string]bool) *demoUser {
+	// 用平方偏置抽取：少数人贡献多数邀请，于是「去重邀请人数」远小于
+	// 「邀请关系数」（真实裂变的长尾），同时 80% 的邀请落在还没邀请过人的候选上。
 	if len(pool) == 0 {
 		return nil
 	}
@@ -342,9 +346,9 @@ func (s *DemoSeed) flush(ctx context.Context, client *ent.Client, batch []*ent.E
 	return nil
 }
 
-// sampleLogins 抽样当天的活跃用户，当天每人只产生一条登录事件。自然流量被抽中后
-// 有 organicSkip 的概率被丢弃，被邀用户因此获得更高的回访率（质量部件的留存差值）。
 func sampleLogins(client *ent.Client, tenant string, pool []*demoUser, invited map[string]bool, dayAgo int, rng *rand.Rand) []*ent.EventLogCreate {
+	// 抽样当天的活跃用户，当天每人只产生一条登录事件。自然流量被抽中后
+	// 有 organicSkip 的概率被丢弃，被邀用户因此获得更高的回访率（质量部件的留存差值）。
 	target := int(math.Round(180 / math.Pow(dailyDecay, float64(dayAgo))))
 	seen := make(map[string]bool, target)
 	out := make([]*ent.EventLogCreate, 0, target)
@@ -362,8 +366,8 @@ func sampleLogins(client *ent.Client, tenant string, pool []*demoUser, invited m
 	return out
 }
 
-// sampleEvents 抽样 n 条同名事件；同样按 organicSkip 偏向被邀用户。
 func sampleEvents(client *ent.Client, tenant string, pool []*demoUser, invited map[string]bool, dayAgo int, n int64, eventName string, rng *rand.Rand) []*ent.EventLogCreate {
+	// 抽样 n 条同名事件；同样按 organicSkip 偏向被邀用户。
 	out := make([]*ent.EventLogCreate, 0, n)
 	for i := int64(0); i < n; i++ {
 		u := pool[rng.Intn(len(pool))]
@@ -388,8 +392,8 @@ func eventCreate(client *ent.Client, tenant, userID, eventName string, at time.T
 	return ec
 }
 
-// timeAt 把 dayAgo 换算成当天的随机时刻；「今天」只取到当前小时，避免写未来时间。
 func timeAt(dayAgo int, rng *rand.Rand) time.Time {
+	// 把 dayAgo 换算成当天的随机时刻；「今天」只取到当前小时，避免写未来时间。
 	now := time.Now()
 	day := startOfDay(now).AddDate(0, 0, -dayAgo)
 	span := 24

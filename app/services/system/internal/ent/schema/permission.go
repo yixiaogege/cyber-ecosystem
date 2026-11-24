@@ -13,7 +13,7 @@ import (
 )
 
 // Grant atom: operation pattern + optional row scope + linked policies
-// (AND semantics). effect is always "allow" today.
+// (AND semantics); effect is always "allow".
 type Permission struct {
 	ent.Schema
 }
@@ -41,6 +41,7 @@ func (Permission) Mixin() []ent.Mixin {
 		mixins.IDStringMixin{},
 		mixins.CreatedUpdatedMixin{},
 		local_mixins.TenantMixin{},
+		local_mixins.AuthzStampMixin{},
 	}
 }
 

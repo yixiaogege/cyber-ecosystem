@@ -2,14 +2,10 @@ package filepresign
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"time"
 
-	"github.com/rs/xid"
-
 	"cyber-ecosystem/shared-go/capability/storage"
-	"cyber-ecosystem/shared-go/kratos/security"
 	"cyber-ecosystem/shared-go/utils"
 
 	errorspb "cyber-ecosystem/gen/go/cyber/shared/errors/v1"
@@ -71,6 +67,7 @@ type ResumeOut struct {
 type FilePresignRP interface {
 	Create(ctx context.Context, f *file.File) (*file.File, error)
 	MarkConfirmed(ctx context.Context, id string, size int64, contentType, etag string) (*file.File, error)
+	SetUploadID(ctx context.Context, id, uploadID string) error
 	Delete(ctx context.Context, id string) error
 	FindByID(ctx context.Context, id string) (*file.File, error)
 	Limits() storage.Limits
@@ -89,19 +86,21 @@ type FilePresignRP interface {
 type FilePresignUC struct {
 	shared.UC
 	fileRP FilePresignRP
+	clock  shared.Clock
 }
 
 func NewFilePresignUC(logger *slog.Logger, tm shared.Transaction, fileRP FilePresignRP) *FilePresignUC {
 	return &FilePresignUC{
 		UC:     shared.NewUC(logger.With("module", "module/filepresign"), tm),
 		fileRP: fileRP,
+		clock:  time.Now,
 	}
 }
 
 // Method --------------------------------------------------------------------------------------------------------------
 
 func (uc *FilePresignUC) Create(ctx context.Context, in *CreateIn) (*CreateOut, error) {
-	subjectID, err := subjectUserID(ctx)
+	subjectID, err := shared.SubjectUserID(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +109,7 @@ func (uc *FilePresignUC) Create(ctx context.Context, in *CreateIn) (*CreateOut, 
 		return nil, systempb.ErrorSystemFileTooLarge("")
 	}
 	f := &file.File{
-		Key:         newKey(),
+		Key:         shared.NewKey(),
 		Name:        in.Name,
 		ContentType: in.ContentType,
 		Size:        in.Size,
@@ -119,7 +118,7 @@ func (uc *FilePresignUC) Create(ctx context.Context, in *CreateIn) (*CreateOut, 
 		OwnerID:     subjectID,
 	}
 	ttl := limits.PresignTTL
-	expiresAt := time.Now().Add(ttl)
+	expiresAt := uc.clock().Add(ttl)
 	if in.Size < limits.MultipartThreshold {
 		url, err := uc.fileRP.PresignUpload(ctx, f.Key, in.Size, ttl)
 		if err != nil {
@@ -159,7 +158,7 @@ func (uc *FilePresignUC) Create(ctx context.Context, in *CreateIn) (*CreateOut, 
 }
 
 func (uc *FilePresignUC) Confirm(ctx context.Context, id string, parts []PartETag) (*file.File, error) {
-	subjectID, err := subjectUserID(ctx)
+	subjectID, err := shared.SubjectUserID(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +188,7 @@ func (uc *FilePresignUC) Confirm(ctx context.Context, id string, parts []PartETa
 }
 
 func (uc *FilePresignUC) Abort(ctx context.Context, id string) error {
-	subjectID, err := subjectUserID(ctx)
+	subjectID, err := shared.SubjectUserID(ctx)
 	if err != nil {
 		return err
 	}
@@ -211,7 +210,7 @@ func (uc *FilePresignUC) Abort(ctx context.Context, id string) error {
 }
 
 func (uc *FilePresignUC) ListParts(ctx context.Context, id string) (*ResumeOut, error) {
-	subjectID, err := subjectUserID(ctx)
+	subjectID, err := shared.SubjectUserID(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -223,7 +222,7 @@ func (uc *FilePresignUC) ListParts(ctx context.Context, id string) (*ResumeOut, 
 		return nil, systempb.ErrorSystemFileInvalidState("")
 	}
 	limits := uc.fileRP.Limits()
-	expiresAt := time.Now().Add(limits.PresignTTL)
+	expiresAt := uc.clock().Add(limits.PresignTTL)
 	// A single-PUT session is the degenerate one-part plan (partSize = whole
 	// size): there is no part state to list — resume either confirms in place
 	// when the object already landed, or retries the whole object on a
@@ -254,7 +253,18 @@ func (uc *FilePresignUC) ListParts(ctx context.Context, id string) (*ResumeOut, 
 	}
 	uploaded, err := uc.fileRP.ListParts(ctx, f.Key, f.UploadID)
 	if err != nil {
-		return nil, err
+		if !errorspb.IsInfraErrorStorageNotFound(err) {
+			return nil, err
+		}
+		fresh, ierr := uc.fileRP.CreateMultipart(ctx, f.Key, f.ContentType)
+		if ierr != nil {
+			return nil, ierr
+		}
+		if uerr := uc.fileRP.SetUploadID(ctx, f.ID, fresh); uerr != nil {
+			return nil, uerr
+		}
+		f.UploadID = fresh
+		uploaded = nil
 	}
 	partSize, partCount := planOf(limits, f.Size)
 	uploadedSet := make(map[int32]struct{}, len(uploaded))
@@ -360,10 +370,6 @@ func misalignedPart(p storage.CompletedPart, partSize int64, partCount int32) bo
 		(p.Size != partSize && p.PartNumber != partCount)
 }
 
-func newKey() string {
-	return "f/" + xid.New().String()
-}
-
 func effectivePartSize(limits storage.Limits, size int64) int64 {
 	// maxParts mirrors the S3 multipart cap — raise the floor so a plan
 	// never exceeds it.
@@ -375,12 +381,4 @@ func effectivePartSize(limits storage.Limits, size int64) int64 {
 
 func ceilDiv(a, b int64) int64 {
 	return (a + b - 1) / b
-}
-
-func subjectUserID(ctx context.Context) (string, error) {
-	subject, ok := security.SubjectFromCtx(ctx)
-	if !ok {
-		return "", errorspb.ErrorGeneralErrorUnauthenticated("").WithCause(fmt.Errorf("no subject in context"))
-	}
-	return subject.UserID, nil
 }

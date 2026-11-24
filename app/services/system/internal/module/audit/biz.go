@@ -45,7 +45,7 @@ type AuditLog struct {
 	DenyReason    string
 }
 
-type AuditListIn struct {
+type ListIn struct {
 	*commonpb.PageRequest
 	OrderBy    []string
 	Tenant     string
@@ -56,7 +56,7 @@ type AuditListIn struct {
 	Denied     *bool
 }
 
-type AuditListOut struct {
+type ListOut struct {
 	*commonpb.PageResponse
 	List []*AuditLog
 }
@@ -86,7 +86,7 @@ type ExportListOut struct {
 // Port ----------------------------------------------------------------------------------------------------------------
 
 type AuditRP interface {
-	ListAuditLogs(ctx context.Context, in *AuditListIn) (*AuditListOut, error)
+	ListAuditLogs(ctx context.Context, in *ListIn) (*ListOut, error)
 	Publish(ctx context.Context, ev *kaudit.Event)
 	CreateExport(ctx context.Context, fileID, ownerID string) error
 	ListExports(ctx context.Context, in *ExportListIn) (*ExportListOut, error)
@@ -112,7 +112,7 @@ func NewAuditUC(logger *slog.Logger, tm shared.Transaction, auditRP AuditRP, fil
 
 // Method --------------------------------------------------------------------------------------------------------------
 
-func (uc *AuditUC) List(ctx context.Context, in *AuditListIn) (*AuditListOut, error) {
+func (uc *AuditUC) List(ctx context.Context, in *ListIn) (*ListOut, error) {
 	subject, ok := security.SubjectFromCtx(ctx)
 	if !ok {
 		return nil, errorspb.ErrorGeneralErrorUnauthenticated("").WithCause(fmt.Errorf("audit list requires a subject"))
@@ -131,7 +131,8 @@ func (uc *AuditUC) Export(ctx context.Context, in *ExportIn) (*file.File, error)
 		return nil, errorspb.ErrorGeneralErrorUnauthenticated("").WithCause(fmt.Errorf("audit export requires a subject"))
 	}
 	spec := &file.GenerationSpec{
-		Name:        fmt.Sprintf("audit-logs-%s.csv", time.Now().UTC().Format("20060102T150405Z")),
+		Name: fmt.Sprintf("audit-logs-%s.csv",
+			time.Now().UTC().Format("20060102T150405Z")), // wall-clock: export filename stamp — presentation, never asserted
 		ContentType: "text/csv",
 		Produce: func(gctx context.Context, w io.Writer) error {
 			return uc.writeAuditCSV(gctx, w, subject.TenantID, in.IDs)
@@ -152,6 +153,25 @@ func (uc *AuditUC) Emit(ctx context.Context, ev *kaudit.Event) {
 
 // Private -------------------------------------------------------------------------------------------------------------
 
+func sanitizeAuditCell(s string) string {
+	// Defuses spreadsheet formula injection on the export's free-text
+	// columns: a value starting with =, +, -, @, or tab would be executed
+	// as a formula by Excel/Sheets when an admin opens the file, and these
+	// columns carry request data (user agent, operation, path, deny reason,
+	// actor, ip, tenant). A leading apostrophe renders the cell literal;
+	// every other value passes through byte-identical. Numeric and
+	// vocabulary columns (status, latency, method, principal type) never
+	// route through here — a negative number is data, not a formula.
+	if s == "" {
+		return s
+	}
+	switch s[0] {
+	case '=', '+', '-', '@', '\t':
+		return "'" + s
+	}
+	return s
+}
+
 func (uc *AuditUC) writeAuditCSV(ctx context.Context, w io.Writer, tenant string, ids []string) error {
 	// Batching keeps memory O(batch) whatever the row count; the tenant
 	// rule mirrors List — the caller's tenant plus the subject-less
@@ -163,10 +183,10 @@ func (uc *AuditUC) writeAuditCSV(ctx context.Context, w io.Writer, tenant string
 	emit := func(logs []*AuditLog) error {
 		for _, l := range logs {
 			rec := []string{
-				l.ID, l.CreatedAt.UTC().Format(time.RFC3339Nano), l.Tenant, l.Actor,
-				l.PrincipalType, l.Operation, l.HTTPMethod, l.HTTPPath,
+				l.ID, l.CreatedAt.UTC().Format(time.RFC3339Nano), sanitizeAuditCell(l.Tenant), sanitizeAuditCell(l.Actor),
+				l.PrincipalType, sanitizeAuditCell(l.Operation), l.HTTPMethod, sanitizeAuditCell(l.HTTPPath),
 				strconv.Itoa(l.Status), strconv.Itoa(l.LatencyMs),
-				l.IP, l.UserAgent, l.DenyReason,
+				sanitizeAuditCell(l.IP), sanitizeAuditCell(l.UserAgent), sanitizeAuditCell(l.DenyReason),
 			}
 			if err := cw.Write(rec); err != nil {
 				return err

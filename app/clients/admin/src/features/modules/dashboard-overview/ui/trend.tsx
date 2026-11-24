@@ -148,7 +148,7 @@ export function TrendChart({ data }: Readonly<{ data: GetTrendResponse }>) {
       </svg>
       {hover !== null && labels[hover] !== undefined ? (
         <div
-          className="pointer-events-none absolute top-6 left-6 z-10 rounded-lg border border-line bg-elevated px-3 py-2 text-ink text-xs leading-relaxed shadow-layer-md"
+          className="border-line bg-elevated text-ink shadow-layer-md pointer-events-none absolute top-6 left-6 z-10 rounded-lg border px-3 py-2 text-xs leading-relaxed"
           style={{ fontVariantNumeric: "tabular-nums" }}
         >
           <div className="text-ink-tertiary">{labels[hover]}</div>

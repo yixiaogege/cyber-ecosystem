@@ -6,6 +6,17 @@
 
 This repo is a **generic skeleton**: every rule below is a per-app pattern, not tied to any specific app. Instance state (service set, client set, URLs, ports) lives in the compose files and `deploy/docker/traefik/dynamic.yaml` themselves — read those for what exists, read this for how it fits together.
 
+## Read map
+
+| About to touch | Read first |
+|---|---|
+| compose files, profiles, start/stop targets | §1, §2 |
+| an app `Dockerfile` or image target | §3, §6 |
+| the edge (`deploy/docker/traefik/**`) | §5, §7 step 3 |
+| `deploy/images/**` | §3 |
+| migration wiring | §10 |
+| adding an application | §7, §11 |
+
 ---
 
 ## 1. Shapes & dials
@@ -27,8 +38,9 @@ This repo is a **generic skeleton**: every rule below is a per-app pattern, not 
 | Target | Effect |
 |---|---|
 | `<app>:image` (on each app project) | build that app's image → `cyber-ecosystem/<name>:local`; follows host `GOPROXY` / npm registry |
+| `deploy:image:<name>` | build an infra-derived image (`deploy/images/<name>/`) **only when its tag is missing locally** (existence guard); wired as a `dependsOn` of every start target that activates the `db` profile |
 | `deploy:start` / `deploy:stop` | middleware core (db+storage+mq) |
-| `deploy:<domain>:start/stop` | middleware per domain (`db storage mq realtime media observability`) |
+| `deploy:<domain>:start/stop` | middleware per domain (`db storage mq realtime media observability`) — the `realtime` group (livekit+centrifugo) is a roadmap pre-provision, zero service consumers today |
 | `deploy:app:start/stop/status` | app layer + its hard middleware deps; start builds the app images first (Nx `dependsOn` → `<app>:image`, version-stamped) — compose `up` never builds, so the stamp survives |
 | `deploy:pre:start` / `deploy:pre:full:start` | pre, minimal / full dial (app layer + edge) |
 | `deploy:pre:stop` | edge down + app containers **removed** (middleware untouched) |
@@ -42,9 +54,10 @@ Every `app:start` **rolls all app containers**: docker builds stamp a fresh time
 
 - Each app owns its image definition: `Dockerfile` + `image` Nx target at the app root. Adding an app touches its own project plus §7's deploy-side wiring — nothing else.
 - `deploy/` owns orchestration: compose files, edge, migration wiring, start/stop targets.
-- `deploy/images/<name>/` = infra-derived custom images only (e.g. `pg-extended`), never app images.
+- `deploy/images/<name>/` = infra-derived custom images only (e.g. `pg-extended`), never app images. Each gets an `image:<name>` target in `deploy/project.json` with an existence guard (build-if-missing), depended on by every start target that activates the relevant profile — compose `up` then never faces a local-only tag (its pull-first fallback is registry-dependent and stalls on unreachable registries). Same-tag Dockerfile edits rebuild via `docker image rm` + rerun; a tag bump misses the guard naturally. Upstream tag styles vary — some publish without the `v` prefix (glitchtip) — so verify the exact tag exists before bumping any pin.
 - Both image kinds use the **workspace root as build context** (single Go module + pnpm workspace). The root `.dockerignore` is the **single trim surface** — `MUST NOT` scatter per-directory ignores.
 - pnpm-workspace installs inside image builds `MUST` run with the **full workspace source present** (`COPY` before `install`; a BuildKit store cache mount recovers the lost layer cache). A manifests-only install layer changes pnpm's node_modules shape, and vite's server environment then hashes `?url` css assets differently than the client emits — phantom css names that 404 at runtime (first-paint flash). The admin Dockerfile comment marks the spot.
+- Image build stages invoke package binaries via `pnpm --filter <pkg> exec <bin>` — npm scripts are not used in this repo (workflows are declared as Nx targets in `project.json`; package-local binaries run through `pnpm exec`), so a `pnpm --filter <pkg> build` invocation does not resolve; keep the exec form when editing a client Dockerfile.
 
 ## 4. Discovery names
 
@@ -53,20 +66,21 @@ Every `app:start` **rolls all app containers**: docker builds stamp a fresh time
 
 ## 5. Ports
 
-- Middleware publishes host ports (dev direct access); the app layer publishes nothing.
+- Middleware host ports classify by **who dials them**: a face that a party off the machine dials — browser direct-upload S3, websocket Centrifugo, WebRTC LiveKit signaling + UDP media — publishes beyond loopback (cross-machine dev); every backend-only face (pg/redis/nats/otlp/observability; NATS included — browser realtime rides Centrifugo's websocket, NATS is backend fabric) binds `127.0.0.1` only. The app layer publishes nothing.
 - The edge never rewrites `Host` (S3 presign SigV4 depends on it) and terminates nothing (plain :80; TLS is §9).
 
 ## 6. App configuration
 
 - **kratos services** keep two bootstrap configs of identical shape at the app root: `configs/config.yaml` (bare-metal dev, `localhost` endpoints) and `container/config.yaml` (network aliases, baked into the image). **Mirror every key change across the two.** `configs/` is the dev source directory — kratos reads *every* file in it, so it MUST contain nothing but the dev config. **Relative paths in the dev config anchor at `<service>/cmd/app`** — `kratos run` executes the built binary with the main package's directory as cwd (that is why `-conf ../../configs` resolves); counting dot-dots from `app/services/<svc>` is off by one.
-- Deployment-sensitive values are kratos `${VAR:default}` placeholders, overridden at runtime by `APP_`-prefixed env vars (`APP_DB_HOST=…`). This is the **only** env-override channel: kratos's env source does flat keys, not nested overrides — `APP_DATA_DATABASE_HOST` is silently discarded; the yaml placeholder is what makes an env var reachable. Booleans included (`WithResolveActualTypes` is wired in `main.go`); keep placeholders opt-in — only keys a deployment actually flips.
+- Deployment-sensitive values are kratos `${VAR:default}` placeholders, overridden at runtime by env vars of the **same bare name** (`DB_HOST=…`). This is the **only** env-override channel: kratos's env source does flat keys, not nested overrides — `DATA_DATABASE_HOST` is silently discarded; the yaml placeholder is what makes an env var reachable. Booleans included (`WithResolveActualTypes` is wired in `main.go`). **One placeholder per value** — the interpolator expands the first `${…}` in a value and returns, so a value composing two placeholders silently truncates; constants compose inside the yaml literal, never across placeholders. Placeholder coverage is **field-aligned** across the two files: a key that carries a placeholder in one carries the same placeholder in the other (defaults differ per environment); a key stays literal in both when neither environment flips it.
+- **The env chain has exactly three legs, and every leg is a list to keep aligned.** Leg 1: the `${VAR:…}` placeholder in *both* config yamls — that pair is where a deployment variable is *registered*. Leg 2: the process env var, the placeholder's own bare name (`VAR=…`; `env.NewSource()` admits the whole process environment — no prefix; the boot banner prints the resolved channel values — read it back after exporting). Leg 3: the compose `environment:` passthrough list in `deploy/docker/compose.app.yaml` — a var missing there is *not injectable in any container deployment*, whatever its yaml registration says; the only sanctioned omission is an image-baked fact (e.g. `CATALOG_DIR`), and omissions carry a comment naming that reason. **The audit recipe:** extract the placeholder union of the two yamls, extract the compose env list, set-diff both ways — both differences must be empty (or commented-deliberate). Dev-side injection is the same leg 2 by hand (`export VAR=…`) or nothing (defaults); there is no separate dev channel. The edge **overwrites** (never appends to) `X-Forwarded-For`/`X-Real-IP` — services may trust the first hop as the client; a directly exposed service port is outside the supported topology.
 - **The system image bakes `gen/catalog/`** (the federated grant manifests) to `/etc/cyber/catalog` and normalizes perms with `RUN chmod -R a+rX` — the pipeline tools write at gosec ceilings (0600/0750, root-owned after COPY) while the process runs as `nobody`; repo filesystem and image multi-user semantics are different worlds, and public derived data gets its read grant at the delivery layer. Mounting a subset of manifests instead of the baked set is the config-level composition knob for trimming the service surface.
 - **tanstack clients** read runtime env only (API URL, PORT) and derive the site origin per request (`getSiteUrl`: request URL server-side, `window.location.origin` client-side) — nothing environment-specific is baked; one image serves every deployment. A `server.mjs` host mounts the fetch-handler build output (the vite plugin emits `export default { fetch }`, not a self-starting server): zero-dep node:http + static client serving + WHATWG bridging. SSR calls loop back through the same origin's `/connect` (the edge splits by package prefix), so clients never learn service addresses — the multiservice split has exactly one consumer: the edge.
 
 ## 7. Adding an application
 
 1. App side (self-contained): `Dockerfile` + `image` target at the app root — use the existing kratos service / tanstack client as the template; kratos adds `container/config.yaml` (§6).
-2. `deploy/docker/compose.app.yaml`: service block under the `app` profile — `<service>.api` network alias, healthcheck (kratos: `/healthz` on its http port; client: a static asset), `depends_on` (incl. its migration job, if any), resource limits, `image: cyber-ecosystem/<name>:local`, **no host ports**.
+2. `deploy/docker/compose.app.yaml`: service block under the `app` profile — `<service>.api` network alias, healthcheck (kratos: `/healthz` on its http port; client: a static asset), `depends_on` (incl. its migration job, if any; **every IAM consumer additionally declares `system: condition: service_healthy`** — every authenticated face rides system), resource limits, `image: cyber-ecosystem/<name>:local`, **no host ports**.
 3. Edge (`deploy/docker/traefik/dynamic.yaml`): a second backend service on existing hosts splits by **package prefix**, not a new host — `Host(admin.cyber.test) && PathPrefix(/connect) && PathRegexp(^/connect/cyber\.<svc>\.)` → the service's connect port + `stripprefix` (length-based priority puts it above the bare `/connect` rule), and `Host(api.cyber.test) && PathRegexp(^/cyber\.<svc>\.)` → the same port **without** stripping (that face takes bare procedure paths). Mirror both as a dev vite proxy regex key **before** the plain `/connect` key, with a `*_CONNECT_API_URL` env entry per service (dev-only). A genuinely new product surface may still claim a new host.
 4. Migrations (kratos + ent): one-shot atlas job (§10). Add the database shell to `deploy/docker/postgres/02-databases.sql`; a retained volume needs the `CREATE DATABASE` once by hand (initdb only runs on fresh volumes).
 5. Local pre access: one hosts entry per edge router — the `cyber.test` line in `/etc/hosts` mirrors `dynamic.yaml`'s router set, extend both together.
@@ -95,3 +109,15 @@ A service that hands **presigned URLs to browsers** (S3 today) must sign against
 - Schema migrations run as a **one-shot compose job**: `arigaio/atlas:<version aligned with the local @ariga/atlas CLI>` (the official image; the npm package serves only the bare-metal dev workflow), bound read-only to the service's `internal/ent/migrate/migrations` directory — an offline bundle ships that directory alongside the compose files.
 - The job precedes its service via `depends_on: service_completed_successfully`, so `--wait` stacks wait for schema readiness too. On a retained volume the job is a no-op ("No migration files to execute").
 - A fresh postgres volume is bootstrapped by `deploy/docker/postgres/*.sql` (extensions + database shells); database names are shared facts with the consuming services' configs. Schemas are owned by their consumers: atlas migrations for kratos services, first-connect for the mq capability, setup jobs for the observability tools. Extension ownership follows the same consumer line: init SQL covers the default database and the diff scratch `atlas_dev` (fault-tolerant, skipped on a vanilla image); a service database's extensions land in its own first atlas migration.
+
+## 11. Composition law
+
+One shared base, many applications on top:
+
+- **`system` is the mandatory base service** every application deploys: authentication, user identity, org, roles, the authz engine, the resource catalog, plus the **platform-level operational analytics** every application inherits for free — the cross-domain event ledger (`event_log`), invite graph (`user_referral`) and daily rollups (`platform_analytics`) behind the ops dashboard. Each application adds services under `app/services/<name>` owning their aggregates end-to-end (schema, migrations, biz, RPC); business services grow no identity or auth of their own (kratos CONVENTIONS §5a).
+- **User split:** `system.User` is the authentication identity core only (credentials, org membership, role bindings). App-specific person data is the app's own domain aggregate keyed by `user_id`, named by its domain concept (`Delegate`, `Operator`) — never field bags on User. A field enters `system.User` only when the declared scenario set needs it in the shared core. Reads hydrate identity via system RPCs — a missing profile degrades rendering, never breaks the row.
+- **The service set is a deployment dial, cheapest tier first:** permission gating by default (hide-by-default — an ungranted operation never surfaces) → config-level module registry when the API itself must be absent (mounting a catalog subset is the knob, §6) → code fork only when isolation physically forces it, and then as a delivery action, not a development structure.
+- **Trunk composition:** applications coexist as directories in one trunk — deploy profiles select the service set (the `app` profile in `compose.app.yaml`), the client composes menu and skin per app.
+- `shared-go` / `shared-ts` carry capabilities, never business aggregates.
+
+Deploy changes close as chore kind — owning chain = `deploy:validate` (compose config validation over every compose file) plus this doc's section laws (§10 for migrations); close with an evidence declaration line (what ran, what was observed).

@@ -10,15 +10,15 @@ import { sessionQuery } from "../../auth/session.fn";
 export function SiderUserCard({ collapsed }: Readonly<{ collapsed: boolean }>) {
   const router = useRouter();
   const { data } = useQuery(sessionQuery);
-  const email = data?.status === "authed" ? data.user.email : "";
-  const name = email.split("@")[0] ?? "";
+  const account = data?.status === "authed" ? data.user.account : "";
+  const name = account.split("@")[0] ?? "";
   const avatarUrl = useFileUrl(data?.status === "authed" ? data.user.avatar : undefined);
 
   return (
     <button
       aria-label={m.layout_dashboard_sidebar_profile()}
       className={clsx(
-        "flex h-16 w-full flex-none cursor-pointer items-center border-line-soft border-t px-4 text-start transition-colors hover:bg-fill-secondary focus-visible:outline-2 focus-visible:outline-primary",
+        "border-line-soft hover:bg-fill-secondary focus-visible:outline-primary flex h-16 w-full flex-none cursor-pointer items-center border-t px-4 text-start transition-colors focus-visible:outline-2",
         collapsed ? "justify-center px-0" : "gap-2.5",
       )}
       onClick={() => router.navigate({ to: "/dashboard/profile" })}
@@ -26,7 +26,7 @@ export function SiderUserCard({ collapsed }: Readonly<{ collapsed: boolean }>) {
     >
       <Tooltip
         placement={getTextDirection() === "rtl" ? "left" : "right"}
-        title={email || undefined}
+        title={account || undefined}
       >
         <Avatar className="flex-none" size={collapsed ? 30 : 34} src={avatarUrl}>
           {name.charAt(0).toUpperCase()}
@@ -34,8 +34,8 @@ export function SiderUserCard({ collapsed }: Readonly<{ collapsed: boolean }>) {
       </Tooltip>
       {collapsed ? null : (
         <div className="flex min-w-0 flex-col">
-          <span className="truncate font-medium text-[13px]">{name}</span>
-          <span className="truncate font-mono text-[11px] text-ink-tertiary">{email}</span>
+          <span className="truncate text-[13px] font-medium">{name}</span>
+          <span className="text-ink-tertiary truncate font-mono text-[11px]">{account}</span>
         </div>
       )}
     </button>

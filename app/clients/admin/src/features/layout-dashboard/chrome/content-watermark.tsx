@@ -15,8 +15,8 @@ export function ContentWatermark({ children }: Readonly<PropsWithChildren>) {
 
   return (
     <Watermark
-      className={clsx("overflow-visible! flex w-full flex-col", fullHeight ? "h-full" : "h-full")}
-      content={enabled ? [APP_NAME, user.email ?? ""] : undefined}
+      className={clsx("flex w-full flex-col overflow-visible!", fullHeight ? "h-full" : "h-full")}
+      content={enabled ? [APP_NAME, user.account ?? ""] : undefined}
       font={{ color: token.colorTextQuaternary }}
       zIndex={20}
     >

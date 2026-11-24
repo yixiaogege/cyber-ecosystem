@@ -8,11 +8,10 @@ import (
 	"slices"
 	"time"
 
-	"github.com/go-kratos/kratos/v3/errors"
-
 	kauthz "cyber-ecosystem/shared-go/kratos/security/authz"
 
 	commonpb "cyber-ecosystem/gen/go/cyber/shared/common/v1"
+	errorspb "cyber-ecosystem/gen/go/cyber/shared/errors/v1"
 	systempb "cyber-ecosystem/gen/go/cyber/system/v1"
 
 	"cyber-ecosystem/app/services/system/internal/shared"
@@ -32,7 +31,7 @@ type Policy struct {
 	BoundCount int64
 }
 
-type PolicyListIn struct {
+type ListIn struct {
 	*commonpb.PageRequest
 	OrderBy []string
 	Kind    *string
@@ -40,7 +39,7 @@ type PolicyListIn struct {
 	Enabled *bool
 }
 
-type PolicyListOut struct {
+type ListOut struct {
 	*commonpb.PageResponse
 	List []*Policy
 }
@@ -51,7 +50,7 @@ type PolicyRP interface {
 	Create(ctx context.Context, p *Policy) (*Policy, error)
 	Update(ctx context.Context, fieldsMask []string, p *Policy) (*Policy, error)
 	Delete(ctx context.Context, id string) (string, error)
-	List(ctx context.Context, in *PolicyListIn) (*PolicyListOut, error)
+	List(ctx context.Context, in *ListIn) (*ListOut, error)
 	FindByID(ctx context.Context, id string) (*Policy, error)
 	FindByIDs(ctx context.Context, ids []string) ([]*Policy, error)
 	NotifyChanged(ctx context.Context)
@@ -87,7 +86,7 @@ func (uc *PolicyUC) Create(ctx context.Context, p *Policy) (*Policy, error) {
 func (uc *PolicyUC) Update(ctx context.Context, fieldsMask []string, p *Policy) (*Policy, error) {
 	stored, err := uc.policyRP.FindByID(ctx, p.ID)
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if errorspb.IsInfraErrorDbNotFound(err) {
 			return nil, systempb.ErrorSystemPolicyNotFound("")
 		}
 		return nil, err
@@ -118,6 +117,12 @@ func (uc *PolicyUC) Update(ctx context.Context, fieldsMask []string, p *Policy) 
 }
 
 func (uc *PolicyUC) Delete(ctx context.Context, id string) (string, error) {
+	if _, err := uc.policyRP.FindByID(ctx, id); err != nil {
+		if errorspb.IsInfraErrorDbNotFound(err) {
+			return "", systempb.ErrorSystemPolicyNotFound("")
+		}
+		return "", err
+	}
 	var out string
 	err := uc.Tm.InTx(ctx, func(ctx context.Context) error {
 		// The join rows must go on the same transaction client as the row
@@ -135,14 +140,14 @@ func (uc *PolicyUC) Delete(ctx context.Context, id string) (string, error) {
 	return out, nil
 }
 
-func (uc *PolicyUC) List(ctx context.Context, in *PolicyListIn) (*PolicyListOut, error) {
+func (uc *PolicyUC) List(ctx context.Context, in *ListIn) (*ListOut, error) {
 	return uc.policyRP.List(ctx, in)
 }
 
 func (uc *PolicyUC) Get(ctx context.Context, id string) (*Policy, error) {
 	out, err := uc.policyRP.FindByID(ctx, id)
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if errorspb.IsInfraErrorDbNotFound(err) {
 			return nil, systempb.ErrorSystemPolicyNotFound("")
 		}
 		return nil, err

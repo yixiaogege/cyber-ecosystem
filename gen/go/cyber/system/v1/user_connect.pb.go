@@ -12,8 +12,9 @@ func RegisterUserServiceConnectServer(srv *connect.Server, svc UserServiceServer
 	connect.HandleUnary(srv, "/cyber.system.v1.UserService/CreateUser", svc.CreateUser)
 	connect.HandleUnary(srv, "/cyber.system.v1.UserService/UpdateUser", svc.UpdateUser)
 	connect.HandleUnary(srv, "/cyber.system.v1.UserService/UpdateUserStatus", svc.UpdateUserStatus)
-	connect.HandleUnary(srv, "/cyber.system.v1.UserService/ChangePassword", svc.ChangePassword)
 	connect.HandleUnary(srv, "/cyber.system.v1.UserService/DeleteUser", svc.DeleteUser)
 	connect.HandleUnary(srv, "/cyber.system.v1.UserService/ListUsers", svc.ListUsers)
 	connect.HandleUnary(srv, "/cyber.system.v1.UserService/GetUser", svc.GetUser)
+	connect.HandleUnary(srv, "/cyber.system.v1.UserService/BatchGetUsers", svc.BatchGetUsers)
+	connect.HandleUnary(srv, "/cyber.system.v1.UserService/ListUsersByPopulation", svc.ListUsersByPopulation)
 }

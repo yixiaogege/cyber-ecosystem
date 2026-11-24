@@ -12,6 +12,7 @@ import (
 	"cyber-ecosystem/app/services/agent/internal/conf"
 	"cyber-ecosystem/app/services/agent/internal/module/agentconfig"
 	"cyber-ecosystem/app/services/agent/internal/module/agentconfigadmin"
+	"cyber-ecosystem/app/services/agent/internal/module/audit"
 	"cyber-ecosystem/app/services/agent/internal/module/authz"
 	"cyber-ecosystem/app/services/agent/internal/module/chat"
 	"cyber-ecosystem/app/services/agent/internal/platform"
@@ -24,71 +25,24 @@ import (
 
 // wireApp init kratos application.
 func wireApp(confServer *conf.Server, data *conf.Data, remote *conf.Remote, crypto *conf.Crypto, logger *slog.Logger) (*kratos.App, func(), error) {
-	cache, cleanup, err := platform.NewCache(data, logger)
+	entClient, cleanup, err := platform.NewEntClient(data, logger)
 	if err != nil {
-		return nil, nil, err
-	}
-	cacheErrorHandler, err := platform.NewCacheErrorHandler()
-	if err != nil {
-		cleanup()
-		return nil, nil, err
-	}
-	entClient, cleanup2, err := platform.NewEntClient(data, logger)
-	if err != nil {
-		cleanup()
 		return nil, nil, err
 	}
 	entErrorHandler := platform.NewEntErrorHandler()
-	storage, cleanup3, err := platform.NewStorage(data)
+	platformPlatform, err := platform.NewPlatform(entClient, entErrorHandler)
 	if err != nil {
-		cleanup2()
-		cleanup()
-		return nil, nil, err
-	}
-	storageErrorHandler, err := platform.NewStorageErrorHandler()
-	if err != nil {
-		cleanup3()
-		cleanup2()
-		cleanup()
-		return nil, nil, err
-	}
-	mq, cleanup4, err := platform.NewMQ(data)
-	if err != nil {
-		cleanup3()
-		cleanup2()
-		cleanup()
-		return nil, nil, err
-	}
-	mqErrorHandler, err := platform.NewMQErrorHandler()
-	if err != nil {
-		cleanup4()
-		cleanup3()
-		cleanup2()
-		cleanup()
-		return nil, nil, err
-	}
-	platformPlatform, err := platform.NewPlatform(cache, cacheErrorHandler, entClient, entErrorHandler, storage, storageErrorHandler, mq, mqErrorHandler)
-	if err != nil {
-		cleanup4()
-		cleanup3()
-		cleanup2()
 		cleanup()
 		return nil, nil, err
 	}
 	agentConfigRP := agentconfig.NewAgentConfigRP(logger, platformPlatform)
-	systemClient, cleanup5, err := client.NewSystemClient(remote, logger)
+	systemClient, cleanup2, err := client.NewSystemClient(remote, logger)
 	if err != nil {
-		cleanup4()
-		cleanup3()
-		cleanup2()
 		cleanup()
 		return nil, nil, err
 	}
 	agentConfigUC, err := agentconfig.NewAgentConfigUC(logger, platformPlatform, crypto, agentConfigRP, systemClient)
 	if err != nil {
-		cleanup5()
-		cleanup4()
-		cleanup3()
 		cleanup2()
 		cleanup()
 		return nil, nil, err
@@ -98,24 +52,21 @@ func wireApp(confServer *conf.Server, data *conf.Data, remote *conf.Remote, cryp
 	chatRP := chat.NewChatRP(logger, platformPlatform)
 	chatUC, err := chat.NewChatUC(logger, platformPlatform, crypto, agentConfigRP, chatRP)
 	if err != nil {
-		cleanup5()
-		cleanup4()
-		cleanup3()
 		cleanup2()
 		cleanup()
 		return nil, nil, err
 	}
 	chatService := chat.NewChatService(logger, chatUC)
 	v := server.NewRegistrarList(agentConfigService, agentConfigAdminService, chatService)
+	auditRP, cleanup3 := audit.NewAuditRP(logger, platformPlatform)
+	auditUC := audit.NewAuditUC(logger, platformPlatform, auditRP)
 	authzUC := authz.NewAuthzUC(logger, platformPlatform, systemClient)
-	grpcServer := server.NewGRPCServer(confServer, logger, v, systemClient, authzUC)
-	httpServer := server.NewHTTPServer(confServer, logger, v, systemClient, authzUC)
-	connectServer := server.NewConnectServer(confServer, logger, v, systemClient, authzUC)
+	grpcServer := server.NewGRPCServer(confServer, logger, v, systemClient, auditUC, authzUC)
+	httpServer := server.NewHTTPServer(confServer, logger, v, systemClient, auditUC, authzUC)
+	connectServer := server.NewConnectServer(confServer, logger, v, systemClient, auditUC, authzUC)
 	lifecycle := bootstrap.NewLifecycle()
 	app := newApp(logger, grpcServer, httpServer, connectServer, lifecycle)
 	return app, func() {
-		cleanup5()
-		cleanup4()
 		cleanup3()
 		cleanup2()
 		cleanup()

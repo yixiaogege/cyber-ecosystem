@@ -5,9 +5,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/go-kratos/kratos/v3/errors"
-
 	commonpb "cyber-ecosystem/gen/go/cyber/shared/common/v1"
+	errorspb "cyber-ecosystem/gen/go/cyber/shared/errors/v1"
 	systempb "cyber-ecosystem/gen/go/cyber/system/v1"
 
 	"cyber-ecosystem/app/services/system/internal/shared"
@@ -26,20 +25,20 @@ type Dept struct {
 	UserCount int64
 }
 
-type DeptListIn struct {
+type ListIn struct {
 	*commonpb.PageRequest
 	OrderBy []string
 	Name    *string
 }
 
-type DeptListOut struct {
+type ListOut struct {
 	*commonpb.PageResponse
 	List []*Dept
 }
 
 type DeptMember struct {
 	UserID  string
-	Email   string
+	Account string
 	Enabled bool
 }
 
@@ -59,7 +58,7 @@ type DeptRP interface {
 	Create(ctx context.Context, d *Dept) (*Dept, error)
 	Update(ctx context.Context, fieldsMask []string, d *Dept) (*Dept, error)
 	Delete(ctx context.Context, id string) (string, error)
-	List(ctx context.Context, in *DeptListIn) (*DeptListOut, error)
+	List(ctx context.Context, in *ListIn) (*ListOut, error)
 	Get(ctx context.Context, id string) (*Dept, error)
 	HasChildren(ctx context.Context, id string) (bool, error)
 	HasUsers(ctx context.Context, id string) (bool, error)
@@ -96,9 +95,18 @@ func (uc *DeptUC) Create(ctx context.Context, d *Dept) (out *Dept, err error) {
 }
 
 func (uc *DeptUC) Update(ctx context.Context, fieldsMask []string, d *Dept) (out *Dept, err error) {
+	if err = uc.ensureDept(ctx, d.ID); err != nil {
+		return nil, err
+	}
 	err = uc.Tm.InTx(ctx, func(ctx context.Context) error {
 		// reparenting: only when a new parent is set (d.ParentID != nil). Clearing to root
 		// (d.ParentID == nil) has no cycle risk; the repo clears it only when fieldsMask asks.
+		// The cycle check below is check-then-act: two concurrent reparents can
+		// each pass IsAncestor and swap into a cycle anyway. Accepted — the
+		// cycle is read-safe (IsAncestor and the subtree walk carry a visited
+		// set, so nothing loops forever) and self-heals with one more
+		// reparent; closing the race would take a tree-wide lock or
+		// serializable isolation, too dear for an admin-rare operation.
 		if d.ParentID != nil {
 			if *d.ParentID == d.ID {
 				return systempb.ErrorSystemDeptSelfParent("")
@@ -121,6 +129,9 @@ func (uc *DeptUC) Update(ctx context.Context, fieldsMask []string, d *Dept) (out
 }
 
 func (uc *DeptUC) Delete(ctx context.Context, id string) (out string, err error) {
+	if err = uc.ensureDept(ctx, id); err != nil {
+		return "", err
+	}
 	err = uc.Tm.InTx(ctx, func(ctx context.Context) error {
 		has, e := uc.deptRP.HasChildren(ctx, id)
 		if e != nil {
@@ -142,7 +153,7 @@ func (uc *DeptUC) Delete(ctx context.Context, id string) (out string, err error)
 	return
 }
 
-func (uc *DeptUC) List(ctx context.Context, in *DeptListIn) (*DeptListOut, error) {
+func (uc *DeptUC) List(ctx context.Context, in *ListIn) (*ListOut, error) {
 	return uc.deptRP.List(ctx, in)
 }
 
@@ -182,7 +193,7 @@ func (uc *DeptUC) ListMembers(ctx context.Context, in *MemberListIn) (*MemberLis
 
 func (uc *DeptUC) ensureDept(ctx context.Context, id string) error {
 	if _, err := uc.deptRP.Get(ctx, id); err != nil {
-		if errors.IsNotFound(err) {
+		if errorspb.IsInfraErrorDbNotFound(err) {
 			return systempb.ErrorSystemDeptNotFound("")
 		}
 		return err

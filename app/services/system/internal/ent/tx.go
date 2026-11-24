@@ -20,22 +20,32 @@ type Tx struct {
 	AuditLog *AuditLogClient
 	// AuthzPolicy is the client for interacting with the AuthzPolicy builders.
 	AuthzPolicy *AuthzPolicyClient
+	// AuthzStamp is the client for interacting with the AuthzStamp builders.
+	AuthzStamp *AuthzStampClient
+	// Credential is the client for interacting with the Credential builders.
+	Credential *CredentialClient
 	// Dept is the client for interacting with the Dept builders.
 	Dept *DeptClient
 	// EventLog is the client for interacting with the EventLog builders.
 	EventLog *EventLogClient
 	// File is the client for interacting with the File builders.
 	File *FileClient
+	// Membership is the client for interacting with the Membership builders.
+	Membership *MembershipClient
 	// Permission is the client for interacting with the Permission builders.
 	Permission *PermissionClient
 	// PermissionPolicy is the client for interacting with the PermissionPolicy builders.
 	PermissionPolicy *PermissionPolicyClient
 	// PlatformAnalytics is the client for interacting with the PlatformAnalytics builders.
 	PlatformAnalytics *PlatformAnalyticsClient
+	// Population is the client for interacting with the Population builders.
+	Population *PopulationClient
 	// PrincipalRole is the client for interacting with the PrincipalRole builders.
 	PrincipalRole *PrincipalRoleClient
 	// Role is the client for interacting with the Role builders.
 	Role *RoleClient
+	// Tenant is the client for interacting with the Tenant builders.
+	Tenant *TenantClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
 	// UserReferral is the client for interacting with the UserReferral builders.
@@ -174,14 +184,19 @@ func (tx *Tx) init() {
 	tx.AuditExport = NewAuditExportClient(tx.config)
 	tx.AuditLog = NewAuditLogClient(tx.config)
 	tx.AuthzPolicy = NewAuthzPolicyClient(tx.config)
+	tx.AuthzStamp = NewAuthzStampClient(tx.config)
+	tx.Credential = NewCredentialClient(tx.config)
 	tx.Dept = NewDeptClient(tx.config)
 	tx.EventLog = NewEventLogClient(tx.config)
 	tx.File = NewFileClient(tx.config)
+	tx.Membership = NewMembershipClient(tx.config)
 	tx.Permission = NewPermissionClient(tx.config)
 	tx.PermissionPolicy = NewPermissionPolicyClient(tx.config)
 	tx.PlatformAnalytics = NewPlatformAnalyticsClient(tx.config)
+	tx.Population = NewPopulationClient(tx.config)
 	tx.PrincipalRole = NewPrincipalRoleClient(tx.config)
 	tx.Role = NewRoleClient(tx.config)
+	tx.Tenant = NewTenantClient(tx.config)
 	tx.User = NewUserClient(tx.config)
 	tx.UserReferral = NewUserReferralClient(tx.config)
 }

@@ -7,7 +7,10 @@ import (
 	"cyber-ecosystem/app/services/agent/internal/platform"
 )
 
-const ExtraEmail = "email"
+// MinMasterKeyBytes is the sealing master-key floor shared by every
+// consumer: HKDF derivation cannot add entropy, so a shorter key would
+// silently weaken everything sealed under it — construction refuses it.
+const MinMasterKeyBytes = 16
 
 type Transaction interface {
 	InTx(ctx context.Context, fn func(context.Context) error) error

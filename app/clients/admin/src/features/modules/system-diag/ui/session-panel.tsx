@@ -1,12 +1,18 @@
 import { Collapse, Descriptions } from "antd";
 import { m } from "#/paraglide/messages";
 
-interface SessionPanelProps {
-  email: string;
-  permissions: string[];
+interface MembershipView {
+  tenant: string;
+  population: string;
 }
 
-export function SessionPanel({ email, permissions }: Readonly<SessionPanelProps>) {
+interface SessionPanelProps {
+  account: string;
+  permissions: string[];
+  memberships: readonly MembershipView[];
+}
+
+export function SessionPanel({ account, permissions, memberships }: Readonly<SessionPanelProps>) {
   return (
     <Collapse
       items={[
@@ -18,24 +24,42 @@ export function SessionPanel({ email, permissions }: Readonly<SessionPanelProps>
               colon={false}
               column={1}
               items={[
-                { key: "email", label: "GetCurrentUser", children: email },
+                { key: "account", label: "GetCurrentUser", children: account },
+                {
+                  key: "memberships",
+                  label: m.system_diag_session_seats(),
+                  children: (
+                    <div className="flex flex-col gap-1">
+                      {memberships.length === 0 ? (
+                        <span className="text-[12px]">—</span>
+                      ) : (
+                        memberships.map((membership) => (
+                          <span
+                            className="font-mono text-[12px]"
+                            key={`${membership.tenant}/${membership.population}`}
+                          >
+                            {membership.tenant} / {membership.population}
+                          </span>
+                        ))
+                      )}
+                    </div>
+                  ),
+                },
                 {
                   key: "patterns",
                   label: "patterns",
                   children: (
-                    <span className="flex flex-wrap gap-1">
+                    <div className="flex flex-col gap-1">
                       {permissions.map((p) => (
-                        <span
-                          className="rounded bg-fill-tertiary px-1.5 py-0.5 font-mono text-[12px]"
-                          key={p}
-                        >
+                        <span className="font-mono text-[12px]" key={p}>
                           {p}
                         </span>
                       ))}
-                    </span>
+                    </div>
                   ),
                 },
               ]}
+              layout="vertical"
               size="small"
             />
           ),

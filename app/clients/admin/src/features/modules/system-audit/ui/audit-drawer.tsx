@@ -7,6 +7,7 @@ import { userRefView } from "#/features/app/user/user-ref";
 import { m } from "#/paraglide/messages";
 import { getTextDirection } from "#/paraglide/runtime";
 import { denyHint, denyLabel, StatusTag } from "./event-tags";
+import { dash } from "./format";
 import { Latency } from "./latency";
 
 interface AuditDrawerProps {
@@ -46,8 +47,6 @@ function eventJson(event: AuditLog): string {
   );
 }
 
-const dash = (v: string | undefined) => (v === undefined || v === "" ? "-" : v);
-
 function ActorCell({
   actor,
   actorName,
@@ -69,7 +68,7 @@ function ActorCell({
   }
   return (
     <span className="flex flex-col items-start">
-      <span>{view.email}</span>
+      <span>{view.account}</span>
       <Typography.Text className="font-mono text-[12px]" type="secondary">
         {view.id}
       </Typography.Text>
@@ -84,7 +83,7 @@ function DenyCell({ deny }: Readonly<{ deny: string | undefined }>) {
     <span className="flex flex-col items-start">
       <span className="flex items-baseline gap-1.5">
         {denyLabel(deny)}
-        <span className="font-mono text-[12px] text-ink-tertiary">{deny}</span>
+        <span className="text-ink-tertiary font-mono text-[12px]">{deny}</span>
       </span>
       {hint !== undefined && (
         <Typography.Text className="text-[12px]" type="secondary">
@@ -156,10 +155,10 @@ export function AuditDrawer({
             {dash(event.principalType)}
           </Descriptions.Item>
           <Descriptions.Item label={m.system_audit_field_operation()}>
-            <span className="break-all font-mono text-[12px]">{event.operation}</span>
+            <span className="font-mono text-[12px] break-all">{event.operation}</span>
           </Descriptions.Item>
           <Descriptions.Item label={m.system_audit_col_http()}>
-            <span className="break-all font-mono text-[12px]">
+            <span className="font-mono text-[12px] break-all">
               {`${event.httpMethod ?? ""} ${event.httpPath ?? ""}`}
             </span>
           </Descriptions.Item>
@@ -176,7 +175,7 @@ export function AuditDrawer({
             {dash(event.tenant)}
           </Descriptions.Item>
           <Descriptions.Item label={m.system_audit_field_ua()}>
-            <span className="break-all font-mono text-[12px]">{dash(event.userAgent)}</span>
+            <span className="font-mono text-[12px] break-all">{dash(event.userAgent)}</span>
           </Descriptions.Item>
           <Descriptions.Item label={m.system_audit_field_id()}>
             <Typography.Text copyable={{ tooltips: false }} style={{ fontFamily: "monospace" }}>

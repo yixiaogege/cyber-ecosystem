@@ -9,8 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rs/xid"
-
 	"cyber-ecosystem/shared-go/capability/storage"
 	"cyber-ecosystem/shared-go/kratos/security"
 
@@ -76,7 +74,7 @@ type File struct {
 	OwnerID     string
 }
 
-type FileListIn struct {
+type ListIn struct {
 	*commonpb.PageRequest
 	OrderBy     []string
 	Name        *string
@@ -85,7 +83,7 @@ type FileListIn struct {
 	Source      *string
 }
 
-type FileListOut struct {
+type ListOut struct {
 	*commonpb.PageResponse
 	List []*File
 }
@@ -107,7 +105,7 @@ type GenerationSpec struct {
 type FileRP interface {
 	UpdateName(ctx context.Context, id, name string) (*File, error)
 	Delete(ctx context.Context, id string) error
-	List(ctx context.Context, in *FileListIn) (*FileListOut, error)
+	List(ctx context.Context, in *ListIn) (*ListOut, error)
 	FindByID(ctx context.Context, id string) (*File, error)
 	FindRef(ctx context.Context, id string) (*File, error)
 	Limits() storage.Limits
@@ -134,7 +132,9 @@ type FileRP interface {
 
 type FileUC struct {
 	shared.UC
-	fileRP FileRP
+	fileRP  FileRP
+	domains shared.TenantDomainSource
+	clock   shared.Clock
 
 	genCtx    context.Context
 	genCancel context.CancelFunc
@@ -145,12 +145,14 @@ type FileUC struct {
 	sweepWG     sync.WaitGroup
 }
 
-func NewFileUC(logger *slog.Logger, tm shared.Transaction, fileRP FileRP, lc shared.HookRegistry) *FileUC {
+func NewFileUC(logger *slog.Logger, tm shared.Transaction, fileRP FileRP, domains shared.TenantDomainSource, lc shared.HookRegistry) *FileUC {
 	genCtx, genCancel := context.WithCancel(context.Background())
 	sweepCtx, sweepCancel := context.WithCancel(context.Background())
 	uc := &FileUC{
 		UC:          shared.NewUC(logger.With("module", "module/file"), tm),
 		fileRP:      fileRP,
+		domains:     domains,
+		clock:       time.Now,
 		genCtx:      genCtx,
 		genCancel:   genCancel,
 		sweepCtx:    sweepCtx,
@@ -185,7 +187,7 @@ func (uc *FileUC) Delete(ctx context.Context, id string) error {
 	return uc.fileRP.Delete(ctx, id)
 }
 
-func (uc *FileUC) List(ctx context.Context, in *FileListIn) (*FileListOut, error) {
+func (uc *FileUC) List(ctx context.Context, in *ListIn) (*ListOut, error) {
 	return uc.fileRP.List(ctx, in)
 }
 
@@ -221,26 +223,24 @@ func (uc *FileUC) MintUrls(ctx context.Context, ids []string) ([]*UrlMint, error
 		if err != nil {
 			return nil, err
 		}
-		mints = append(mints, &UrlMint{ID: id, URL: url, ExpiresAt: time.Now().Add(ttl)})
+		mints = append(mints, &UrlMint{ID: id, URL: url, ExpiresAt: uc.clock().Add(ttl)})
 	}
 	return mints, nil
 }
 
 func (uc *FileUC) Generate(ctx context.Context, spec *GenerationSpec, record func(context.Context, *File) error) (*File, error) {
-	// Fail loud, not late: InTx joins an ambient tx, so a caller-side tx
-	// would have the task launch before that tx commits — writing against a
-	// row that may never exist. Domain rows ride the record callback.
+	// InTx joins an ambient tx; a caller-side tx would launch the task before commit.
 	if uc.fileRP.InAmbientTx(ctx) {
 		return nil, errorspb.ErrorGeneralErrorInternal(errGenerateAmbientTx)
 	}
-	ownerID, err := subjectUserID(ctx)
+	ownerID, err := shared.SubjectUserID(ctx)
 	if err != nil {
 		return nil, err
 	}
 	var f *File
 	if err := uc.Tm.InTx(ctx, func(tctx context.Context) error {
 		created, err := uc.fileRP.CreateGeneration(tctx, &File{
-			Key:         newKey(),
+			Key:         shared.NewKey(),
 			Name:        spec.Name,
 			ContentType: spec.ContentType,
 			Source:      SourceServerGenerated,
@@ -313,6 +313,9 @@ func (uc *FileUC) runGeneration(f *File, spec *GenerationSpec) {
 }
 
 func (uc *FileUC) generate(ctx context.Context, f *File, spec *GenerationSpec) error {
+	// The task runs detached from the request that scheduled it; re-pin the
+	// row's tenant so the upload lands in the owning tenant's bucket.
+	ctx = security.WithTenant(ctx, f.TenantID)
 	pr, pw := io.Pipe()
 	go func() {
 		// nil → EOF for the reader; an error propagates through Upload.
@@ -338,10 +341,6 @@ func (uc *FileUC) generate(ctx context.Context, f *File, spec *GenerationSpec) e
 		return errors.Join(mErr, err)
 	}
 	return err
-}
-
-func newKey() string {
-	return "f/" + xid.New().String()
 }
 
 func (uc *FileUC) sweepLoop() {
@@ -379,7 +378,7 @@ func (uc *FileUC) recoveryLoop() {
 }
 
 func (uc *FileUC) runRecovery(ctx context.Context) {
-	cut := time.Now().Add(-staleGenerationAfter)
+	cut := uc.clock().Add(-staleGenerationAfter)
 	n, err := uc.fileRP.FailStaleProcessing(ctx, cut)
 	if err != nil {
 		uc.Log.Warn("generation recovery: fail stale processing", "error", err)
@@ -391,14 +390,29 @@ func (uc *FileUC) runRecovery(ctx context.Context) {
 }
 
 func (uc *FileUC) runSweep(ctx context.Context) {
-	cut := time.Now().Add(-time.Duration(sweepTTLFactor) * uc.fileRP.Limits().PresignTTL)
-	rows := uc.sweepStaleRows(ctx, cut)
-	sessions := uc.sweepOrphanSessions(ctx)
-	objects := uc.sweepOrphanObjects(ctx, cut)
-	reclaimed := uc.sweepExpiredDeleted(ctx, time.Now().Add(-retentionPeriod))
-	if rows+sessions+objects+reclaimed > 0 {
-		uc.Log.Info("file sweep", "rows", rows, "sessions", sessions, "objects", objects, "reclaimed", reclaimed)
+	cut := uc.clock().Add(-time.Duration(sweepTTLFactor) * uc.fileRP.Limits().PresignTTL)
+	for _, domain := range uc.sweepDomains(ctx) {
+		// One domain per pass: the domain switch drives row filtering (the
+		// tenant mixin) and bucket routing (TenantStorage) on the same axis,
+		// so a pass never sees one tenant's rows against another's objects.
+		tctx := security.WithTenant(ctx, domain)
+		rows := uc.sweepStaleRows(tctx, cut)
+		sessions := uc.sweepOrphanSessions(tctx)
+		objects := uc.sweepOrphanObjects(tctx, cut)
+		reclaimed := uc.sweepExpiredDeleted(tctx, uc.clock().Add(-retentionPeriod))
+		if n := rows + sessions + objects + reclaimed; n > 0 {
+			uc.Log.Info("file sweep", "tenant", domain, "rows", rows, "sessions", sessions, "objects", objects, "reclaimed", reclaimed)
+		}
 	}
+}
+
+func (uc *FileUC) sweepDomains(ctx context.Context) []string {
+	domains, err := uc.domains.ListTenantCodes(ctx)
+	if err != nil {
+		uc.Log.Warn("file sweep: list tenant domains", "error", err)
+		return nil
+	}
+	return domains
 }
 
 func (uc *FileUC) sweepStaleRows(ctx context.Context, cut time.Time) int {
@@ -467,7 +481,8 @@ func (uc *FileUC) sweepOrphanSessions(ctx context.Context) int {
 		aborted++
 		return nil
 	})
-	if err != nil && !errors.Is(err, context.Canceled) {
+	// A never-provisioned bucket has nothing to sweep; anything else stays loud.
+	if err != nil && !errors.Is(err, context.Canceled) && !errorspb.IsInfraErrorStorageNotFound(err) {
 		uc.Log.Warn("file sweep: list sessions", "error", err)
 	}
 	return aborted
@@ -482,7 +497,11 @@ func (uc *FileUC) sweepOrphanObjects(ctx context.Context, cut time.Time) int {
 		}
 		res, err := uc.fileRP.ListObjects(ctx, sweepKeyPrefix, cursor, sweepBatch)
 		if err != nil {
-			uc.Log.Warn("file sweep: list objects", "error", err)
+			// A never-provisioned bucket has nothing to sweep; anything else
+			// aborts the pass loudly.
+			if !errorspb.IsInfraErrorStorageNotFound(err) {
+				uc.Log.Warn("file sweep: list objects", "error", err)
+			}
 			return deleted
 		}
 		for _, obj := range res.Objects {
@@ -559,14 +578,6 @@ func (uc *FileUC) sweepExpiredDeleted(ctx context.Context, cut time.Time) int {
 		}
 		afterID = rows[len(rows)-1].ID
 	}
-}
-
-func subjectUserID(ctx context.Context) (string, error) {
-	subject, ok := security.SubjectFromCtx(ctx)
-	if !ok {
-		return "", errorspb.ErrorGeneralErrorUnauthenticated("").WithCause(fmt.Errorf("no subject in context"))
-	}
-	return subject.UserID, nil
 }
 
 func (c *countingReader) Read(p []byte) (int, error) {

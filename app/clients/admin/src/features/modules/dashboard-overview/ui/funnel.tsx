@@ -27,7 +27,7 @@ function stageLabel(key: number): string {
 export function FunnelChart({ funnel }: Readonly<{ funnel: Funnel }>) {
   return (
     <div className="flex flex-col gap-2 px-4 pt-3 pb-3">
-      <div className={`${ROW} text-[10.5px] text-ink-tertiary`}>
+      <div className={`${ROW} text-ink-tertiary text-[10.5px]`}>
         <span>{m.dashboard_overview_funnel_col_stage()}</span>
         <span />
         <span className="text-right">{m.dashboard_overview_funnel_col_count()}</span>
@@ -36,20 +36,20 @@ export function FunnelChart({ funnel }: Readonly<{ funnel: Funnel }>) {
       </div>
       {funnel.stages.map((stage, i) => (
         <div className={ROW} key={stage.key}>
-          <span className="whitespace-nowrap text-ink-secondary">{stageLabel(stage.key)}</span>
-          <span className="h-3 overflow-hidden rounded-md bg-fill-tertiary">
+          <span className="text-ink-secondary whitespace-nowrap">{stageLabel(stage.key)}</span>
+          <span className="bg-fill-tertiary h-3 overflow-hidden rounded-md">
             <span
               className="block h-full rounded-md"
               style={{ background: ORDINAL_FUNNEL[i], width: `${stage.ofFirst.toFixed(1)}%` }}
             />
           </span>
-          <span className="text-right font-bold text-ink-secondary tabular-nums">
+          <span className="text-ink-secondary text-right font-bold tabular-nums">
             {fmt(Number(stage.count))}
           </span>
-          <span className="text-right text-ink-tertiary tabular-nums">
+          <span className="text-ink-tertiary text-right tabular-nums">
             {stage.stepConversion === undefined ? "—" : pct(stage.stepConversion)}
           </span>
-          <span className="text-right text-ink-tertiary tabular-nums">{pct(stage.ofFirst)}</span>
+          <span className="text-ink-tertiary text-right tabular-nums">{pct(stage.ofFirst)}</span>
         </div>
       ))}
     </div>

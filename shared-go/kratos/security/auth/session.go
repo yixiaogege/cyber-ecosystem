@@ -21,38 +21,39 @@ type Authenticator interface {
 // ErrMissingSession denies requests without a usable session credential.
 var ErrMissingSession = errors.Unauthorized("MISSING_SESSION", "")
 
-type Option func(*options)
+// SessionCookieName is the session cookie's wire contract across every
+// server, outbound forwarder, and client in the ecosystem — the single
+// home. Consumers reference it; a re-spelled literal drifts silently.
+const SessionCookieName = "session_token"
 
-type options struct {
-	cookieName string
-}
+// SessionNamespaceHeader declares which client world's credential slot the
+// request presents. The declaration is an untrusted selection among
+// cookies the browser already sent — the plane always derives from the
+// verified seat, never from this header.
+const SessionNamespaceHeader = "x-session-namespace"
 
-// SessionCookie sets the cookie the middleware reads the session token
-// from; it is required.
-func SessionCookie(name string) Option {
-	return func(o *options) { o.cookieName = name }
+// SessionCookieNameFor resolves the session cookie name for one client
+// namespace: undeclared callers (service-to-service forwards, probes) read
+// the base slot; a declared namespace gets its own slot, so multiple
+// client worlds hold concurrent credentials on a single host.
+func SessionCookieNameFor(namespace string) string {
+	if namespace == "" {
+		return SessionCookieName
+	}
+	return SessionCookieName + "_" + namespace
 }
 
 // SessionAuth authenticates requests by their session cookie and injects
 // the resolved subject into the context. Everything fails closed: missing
 // transport, missing cookie, and a nil subject all deny.
-func SessionAuth(authn Authenticator, opts ...Option) middleware.Middleware {
-	o := &options{}
-	for _, opt := range opts {
-		opt(o)
-	}
-	// Without a cookie name every request would fail with a confusing
-	// MISSING_SESSION; that is wiring breakage, so it fails loudly here.
-	if o.cookieName == "" {
-		panic("SessionAuth: SessionCookie(name) is required")
-	}
+func SessionAuth(authn Authenticator) middleware.Middleware {
 	return func(handler middleware.Handler) middleware.Handler {
 		return func(ctx context.Context, req any) (any, error) {
 			tr, ok := transport.FromServerContext(ctx)
 			if !ok {
 				return nil, ErrMissingSession
 			}
-			token := cookieValue(tr.RequestHeader(), o.cookieName)
+			token := cookieValue(tr.RequestHeader(), SessionCookieNameFor(tr.RequestHeader().Get(SessionNamespaceHeader)))
 			if token == "" {
 				return nil, ErrMissingSession
 			}

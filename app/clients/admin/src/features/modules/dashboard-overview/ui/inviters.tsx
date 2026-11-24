@@ -15,7 +15,7 @@ export function InviterRank({ inviters }: Readonly<{ inviters: readonly Inviter[
   const max = Math.max(1, ...inviters.map((i) => num(i.invites)));
   return (
     <div className="flex flex-col gap-2 px-4 pt-2 pb-3">
-      <div className={`${ROW} border-line border-b pb-1 text-[10.5px] text-ink-tertiary`}>
+      <div className={`${ROW} border-line text-ink-tertiary border-b pb-1 text-[10.5px]`}>
         <span>{m.dashboard_overview_inviter_col()}</span>
         <span />
         <span className="text-right">{m.dashboard_overview_inviter_col_invites()}</span>
@@ -23,8 +23,8 @@ export function InviterRank({ inviters }: Readonly<{ inviters: readonly Inviter[
       </div>
       {inviters.map((inviter) => (
         <div className={ROW} key={inviter.userId ?? `${inviter.name}-${inviter.invites}`}>
-          <span className="whitespace-nowrap text-ink-secondary">{inviter.name}</span>
-          <span className="h-2.5 overflow-hidden rounded-[5px] bg-fill-tertiary">
+          <span className="text-ink-secondary whitespace-nowrap">{inviter.name}</span>
+          <span className="bg-fill-tertiary h-2.5 overflow-hidden rounded-[5px]">
             <span
               className="block h-full rounded-[5px]"
               style={{
@@ -33,10 +33,10 @@ export function InviterRank({ inviters }: Readonly<{ inviters: readonly Inviter[
               }}
             />
           </span>
-          <span className="text-right font-bold text-ink-secondary tabular-nums">
+          <span className="text-ink-secondary text-right font-bold tabular-nums">
             {fmt(num(inviter.invites))}
           </span>
-          <span className="text-right text-ink-tertiary tabular-nums">
+          <span className="text-ink-tertiary text-right tabular-nums">
             {pct(inviter.completionRate ?? 0)}
           </span>
         </div>

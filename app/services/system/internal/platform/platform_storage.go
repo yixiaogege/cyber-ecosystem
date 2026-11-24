@@ -1,16 +1,47 @@
 package platform
 
 import (
+	"context"
 	"fmt"
+	"sync"
 
 	"cyber-ecosystem/shared-go/capability/storage"
 	storageS3 "cyber-ecosystem/shared-go/capability/storage/s3"
 	"cyber-ecosystem/shared-go/kratos/observability"
+	"cyber-ecosystem/shared-go/kratos/security"
 
 	"cyber-ecosystem/app/services/system/internal/conf"
 )
 
-func NewStorage(c *conf.Data) (*storage.Storage, func(), error) {
+type TenantStorage struct {
+	*storage.Storage
+
+	defaultBucket string
+	ensured       sync.Map // bucket name → struct{} (provisioned once per process)
+}
+
+func (t *TenantStorage) ForTenant(ctx context.Context) *storage.View {
+	tenant := security.TenantFromCtx(ctx)
+	if tenant == security.DefaultTenant {
+		return &t.View
+	}
+	// explicit domain switch wins over the subject (tenant mixin precedence)
+	bucket := t.defaultBucket + "-" + tenant
+	if _, loaded := t.ensured.LoadOrStore(bucket, struct{}{}); !loaded {
+		// Best-effort provisioning: a failure un-marks the bucket and lets
+		// the operation itself surface the classified error.
+		if err := t.Bucket.Create(ctx, bucket); err != nil {
+			t.ensured.Delete(bucket)
+		}
+	}
+	return t.For(bucket)
+}
+
+func NewTenantStorage(s *storage.Storage, defaultBucket string) *TenantStorage {
+	return &TenantStorage{Storage: s, defaultBucket: defaultBucket}
+}
+
+func NewStorage(c *conf.Data) (*TenantStorage, func(), error) {
 	sc := c.GetStorage()
 	if sc == nil {
 		return nil, nil, fmt.Errorf("storage config is required")
@@ -20,7 +51,7 @@ func NewStorage(c *conf.Data) (*storage.Storage, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	return storageS3.New(client, publicPresigner, cfg), closeFn, nil
+	return NewTenantStorage(storageS3.New(client, publicPresigner, cfg), cfg.Bucket), closeFn, nil
 }
 
 func toStorageConfig(sc *conf.Data_Storage) storageS3.Config {

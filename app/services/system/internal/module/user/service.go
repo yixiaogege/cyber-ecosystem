@@ -45,7 +45,7 @@ func (s *UserService) RegisterConnect(srv *connecttransport.Server) {
 // Handler -------------------------------------------------------------------------------------------------------------
 
 func (s *UserService) CreateUser(ctx context.Context, in *systempb.CreateUserRequest) (*systempb.CreateUserResponse, error) {
-	created, err := s.userUC.Create(ctx, in.Email, in.Password, in.DeptId, in.Avatar, in.Roles)
+	created, err := s.userUC.Create(ctx, in.Account, in.Password, in.DeptId, in.Avatar, in.Roles)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +57,6 @@ func (s *UserService) CreateUser(ctx context.Context, in *systempb.CreateUserReq
 func (s *UserService) UpdateUser(ctx context.Context, in *systempb.UpdateUserRequest) (*systempb.UpdateUserResponse, error) {
 	if _, err := s.userUC.Update(ctx, in.FieldsMask, &User{
 		ID:     in.Id,
-		Email:  in.Email,
 		DeptID: in.DeptId,
 		Avatar: in.Avatar,
 	}, in.Password, in.Roles); err != nil {
@@ -73,13 +72,6 @@ func (s *UserService) UpdateUserStatus(ctx context.Context, in *systempb.UpdateU
 	return &systempb.UpdateUserStatusResponse{}, nil
 }
 
-func (s *UserService) ChangePassword(ctx context.Context, in *systempb.ChangePasswordRequest) (*systempb.ChangePasswordResponse, error) {
-	if err := s.userUC.ChangePassword(ctx, *in.OldPassword, *in.NewPassword); err != nil {
-		return nil, err
-	}
-	return &systempb.ChangePasswordResponse{}, nil
-}
-
 func (s *UserService) DeleteUser(ctx context.Context, in *systempb.DeleteUserRequest) (*systempb.DeleteUserResponse, error) {
 	if _, err := s.userUC.Delete(ctx, in.Id); err != nil {
 		return nil, err
@@ -88,10 +80,10 @@ func (s *UserService) DeleteUser(ctx context.Context, in *systempb.DeleteUserReq
 }
 
 func (s *UserService) ListUsers(ctx context.Context, in *systempb.ListUsersRequest) (*systempb.ListUsersResponse, error) {
-	out, err := s.userUC.List(ctx, &UserListIn{
+	out, err := s.userUC.List(ctx, &ListIn{
 		PageRequest: helper.EnsurePageRequest(in.Page),
 		OrderBy:     in.OrderBy,
-		Email:       in.Email,
+		Account:     in.Account,
 		Enabled:     in.Enabled,
 		DeptID:      in.DeptId,
 	})
@@ -99,6 +91,23 @@ func (s *UserService) ListUsers(ctx context.Context, in *systempb.ListUsersReque
 		return nil, err
 	}
 	return &systempb.ListUsersResponse{
+		Page: out.PageResponse,
+		List: utils.SliceMap(out.List, toProtoUser),
+	}, nil
+}
+
+func (s *UserService) ListUsersByPopulation(ctx context.Context, in *systempb.ListUsersByPopulationRequest) (*systempb.ListUsersByPopulationResponse, error) {
+	out, err := s.userUC.ListByPopulation(ctx, &ListIn{
+		PageRequest: helper.EnsurePageRequest(in.Page),
+		OrderBy:     in.OrderBy,
+		Population:  in.Population,
+		Enabled:     in.Enabled,
+		UserIDs:     in.UserIds,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &systempb.ListUsersByPopulationResponse{
 		Page: out.PageResponse,
 		List: utils.SliceMap(out.List, toProtoUser),
 	}, nil
@@ -114,17 +123,35 @@ func (s *UserService) GetUser(ctx context.Context, in *systempb.GetUserRequest) 
 	}, nil
 }
 
+func (s *UserService) BatchGetUsers(ctx context.Context, in *systempb.BatchGetUsersRequest) (*systempb.BatchGetUsersResponse, error) {
+	users, err := s.userUC.BatchGet(ctx, in.Ids)
+	if err != nil {
+		return nil, err
+	}
+	briefs := make(map[string]*systempb.UserBrief, len(users))
+	for id, u := range users {
+		briefs[id] = &systempb.UserBrief{
+			Id:      utils.StringW(u.ID),
+			Account: utils.Wrap(u.Account, utils.StringW),
+			Avatar:  utils.Wrap(u.Avatar, utils.StringW),
+		}
+	}
+	return &systempb.BatchGetUsersResponse{Users: briefs}, nil
+}
+
 // Private -------------------------------------------------------------------------------------------------------------
 
 func toProtoUser(a *User) *systempb.User {
 	return &systempb.User{
-		Id:        utils.StringW(a.ID),
-		CreatedAt: utils.ToTimestamp(&a.CreatedAt),
-		UpdatedAt: utils.ToTimestamp(&a.UpdatedAt),
-		Email:     utils.Wrap(a.Email, utils.StringW),
-		DeptId:    utils.Wrap(a.DeptID, utils.StringW),
-		Avatar:    utils.Wrap(a.Avatar, utils.StringW),
-		Roles:     a.Roles,
-		Enabled:   utils.BoolW(a.Enabled),
+		Id:          utils.StringW(a.ID),
+		CreatedAt:   utils.ToTimestamp(&a.CreatedAt),
+		UpdatedAt:   utils.ToTimestamp(&a.UpdatedAt),
+		Account:     utils.Wrap(a.Account, utils.StringW),
+		DeptId:      utils.Wrap(a.DeptID, utils.StringW),
+		Avatar:      utils.Wrap(a.Avatar, utils.StringW),
+		Roles:       a.Roles,
+		Enabled:     utils.BoolW(a.Enabled),
+		PhoneMasked: utils.Wrap(a.PhoneMasked, utils.StringW),
+		WechatBound: utils.BoolW(a.WechatBound),
 	}
 }

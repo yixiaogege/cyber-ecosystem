@@ -3,8 +3,8 @@ package authz
 import (
 	"context"
 	"log/slog"
-	"slices"
 	"strings"
+	"time"
 
 	"cyber-ecosystem/shared-go/kratos/security"
 	kauthz "cyber-ecosystem/shared-go/kratos/security/authz"
@@ -31,7 +31,6 @@ type PolicyView struct {
 
 type ExplainResult struct {
 	Allowed   bool
-	Builtin   bool
 	RoleCodes []string
 	Hits      []GrantHit
 }
@@ -54,8 +53,11 @@ type PolicyState struct {
 type AuthzRP interface {
 	ImplicitGrants(ctx context.Context, userID, tenant string) ([]GrantView, error)
 	EffectiveGrants(ctx context.Context, subject *security.Subject) ([]GrantView, error)
+	MemberSubject(subject *security.Subject) (bool, error)
+	PlaneOf(population string) (string, error)
 	ExplainGrants(ctx context.Context, principalType, principalID, tenant, operation string) (*ExplainResult, error)
 	PreviewGrants(ctx context.Context, tenant string, roleCodes []string) ([]string, error)
+	StampVersion(ctx context.Context) (int64, error)
 	StartWatch(ctx context.Context) error
 	StopWatch(ctx context.Context) error
 }
@@ -64,20 +66,29 @@ type AuthzRP interface {
 
 type AuthzUC struct {
 	shared.UC
-	authzRP AuthzRP
+	authzRP     AuthzRP
+	attrSources []kauthz.AttributeSource
 }
 
 func NewAuthzUC(logger *slog.Logger, tm shared.Transaction, authzRP AuthzRP, lc shared.HookRegistry) *AuthzUC {
 	lc.OnStart(authzRP.StartWatch)
 	lc.OnStop(authzRP.StopWatch)
-	return &AuthzUC{UC: shared.NewUC(logger.With("module", "module/authz"), tm), authzRP: authzRP}
+	return &AuthzUC{
+		UC:          shared.NewUC(logger.With("module", "module/authz"), tm),
+		authzRP:     authzRP,
+		attrSources: []kauthz.AttributeSource{timeSource{clock: time.Now}},
+	}
 }
 
 // Method --------------------------------------------------------------------------------------------------------------
 
 func (uc *AuthzUC) Decide(ctx context.Context, subject *security.Subject, operation string) (*kauthz.Decision, error) {
-	if slices.Contains(builtinOperations, operation) {
-		return &kauthz.Decision{Allowed: true, Reason: kauthz.AllowBuiltin}, nil
+	member, err := uc.authzRP.MemberSubject(subject)
+	if err != nil {
+		return nil, err
+	}
+	if member {
+		return &kauthz.Decision{Reason: kauthz.DenyNoGrant}, nil
 	}
 	grants, err := uc.authzRP.ImplicitGrants(ctx, subject.UserID, subject.TenantID)
 	if err != nil {
@@ -94,7 +105,7 @@ func (uc *AuthzUC) Decide(ctx context.Context, subject *security.Subject, operat
 	if len(matched) == 0 {
 		return &kauthz.Decision{Reason: kauthz.DenyNoGrant}, nil
 	}
-	surviving := survivingGrants(ctx, uc.Log, subject, matched)
+	surviving := survivingGrants(ctx, uc.Log, subject, matched, uc.attrSources)
 	if len(surviving) == 0 {
 		return &kauthz.Decision{Reason: kauthz.DenyAbacConstraint}, nil
 	}

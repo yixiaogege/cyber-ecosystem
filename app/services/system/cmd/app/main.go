@@ -99,7 +99,7 @@ func main() {
 	c := config.New(
 		config.WithSource(
 			file.NewSource(flagconf),
-			env.NewSource("APP_"),
+			env.NewSource(),
 		),
 		config.WithResolveActualTypes(true),
 	)
@@ -120,7 +120,7 @@ func main() {
 	}
 	defer shutdownObs()
 
-	app, cleanup, err := wireApp(bc.Server, bc.Data, bc.Authz, bc.Catalog, bc.Seed, logger)
+	app, cleanup, err := wireApp(bc.Server, bc.Data, bc.Catalog, bc.Auth, bc.Seed, logger)
 	if err != nil {
 		panic(err)
 	}

@@ -74,7 +74,7 @@ func (rp *deptRP) Delete(ctx context.Context, id string) (string, error) {
 	return id, nil
 }
 
-func (rp *deptRP) List(ctx context.Context, in *DeptListIn) (*DeptListOut, error) {
+func (rp *deptRP) List(ctx context.Context, in *ListIn) (*ListOut, error) {
 	query := rp.Platform.GetClient(ctx).Dept.Query()
 	helper.WherePtr(query, utils.FromTimestamp(in.CreatedAtA), dept.CreatedAtGTE)
 	helper.WherePtr(query, utils.FromTimestamp(in.CreatedAtZ), dept.CreatedAtLTE)
@@ -87,7 +87,7 @@ func (rp *deptRP) List(ctx context.Context, in *DeptListIn) (*DeptListOut, error
 		"updatedAt": func(sel helper.SQLSelector) { query.Order(sel(dept.FieldUpdatedAt)) },
 	})
 
-	total, offset, limit, err := shared.Paginate(ctx, query, in.PageRequest, helper.DefaultPageSizeUnlimit)
+	total, offset, limit, err := helper.Paginate(ctx, query, in.PageRequest, helper.DefaultPageSizeUnlimit)
 	if err != nil {
 		return nil, rp.Platform.HandleEntError(err)
 	}
@@ -113,7 +113,7 @@ func (rp *deptRP) List(ctx context.Context, in *DeptListIn) (*DeptListOut, error
 	for _, d := range list {
 		d.UserCount = byDept[d.ID]
 	}
-	return &DeptListOut{
+	return &ListOut{
 		PageResponse: helper.BuildPageResponse(total, offset, limit),
 		List:         list,
 	}, nil
@@ -185,7 +185,7 @@ func (rp *deptRP) ListMembers(ctx context.Context, in *MemberListIn) (*MemberLis
 	query := rp.Platform.GetClient(ctx).User.Query().
 		Where(user.DeptIDEQ(in.DeptID)).
 		Order(ent.Asc(user.FieldCreatedAt))
-	total, offset, limit, err := shared.Paginate(ctx, query, in.PageRequest, helper.DefaultPageSizeUnlimit)
+	total, offset, limit, err := helper.Paginate(ctx, query, in.PageRequest, helper.DefaultPageSizeUnlimit)
 	if err != nil {
 		return nil, rp.Platform.HandleEntError(err)
 	}
@@ -216,7 +216,7 @@ func mapDept(d *ent.Dept) *Dept {
 func mapMember(d *ent.User) *DeptMember {
 	return &DeptMember{
 		UserID:  d.ID,
-		Email:   d.Email,
+		Account: d.Account,
 		Enabled: d.Enabled,
 	}
 }

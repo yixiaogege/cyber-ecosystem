@@ -12,7 +12,7 @@ import { useFilter, useServerPagination } from "@cyber-ecosystem/shared-antd/use
 import { useRouteContext, useSearch } from "@tanstack/react-router";
 import type { TableProps } from "antd";
 import { Button, Card, Input, Select } from "antd";
-import { Download, FileDown } from "lucide-react";
+import { FileDown } from "lucide-react";
 import type { Key } from "react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -53,7 +53,7 @@ export function AuditPage() {
   });
 
   const canListUsers = isOperationAllowed(permissions, op(UserService, "listUsers"));
-  const { byId: usersById, byEmail, known: actorKnown } = useUserDirectory(canListUsers);
+  const { byId: usersById, byAccount, known: actorKnown } = useUserDirectory(canListUsers);
   const actorName = (id: string) => usersById.get(id);
 
   const input = useMemo(() => {
@@ -68,13 +68,13 @@ export function AuditPage() {
           values.createdAtZ !== undefined ? timestampFromMs(values.createdAtZ) : undefined,
       },
       orderBy: [search.sort ?? "createdAt:desc"],
-      actor: actor === undefined ? undefined : (byEmail.get(actor) ?? actor),
+      actor: actor === undefined ? undefined : (byAccount.get(actor) ?? actor),
       operation: clean(values.operation?.trim()),
       status: values.status,
       denyReason: clean(values.denyReason),
       denied: values.lens === "denied" ? true : undefined,
     };
-  }, [values, search.pageNo, search.pageSize, search.sort, byEmail]);
+  }, [values, search.pageNo, search.pageSize, search.sort, byAccount]);
 
   const auditQuery = useQuery(listAuditLogs, input);
   const pagination = useServerPagination(store, auditSearchSchema, auditQuery.data?.page, {
@@ -92,25 +92,14 @@ export function AuditPage() {
     values.lens === "denied";
 
   const exportEntry = (
-    <div className="flex items-center gap-2">
-      <Button
-        color="default"
-        icon={<FileDown size={14} />}
-        onClick={() => setExportsOpen(true)}
-        variant="filled"
-      >
-        {m.system_audit_act_export_records()}
-      </Button>
-      <Button
-        color="primary"
-        icon={<Download size={14} />}
-        loading={exportMutation.isPending}
-        onClick={() => exportMutation.mutate({ ids: [] })}
-        variant="filled"
-      >
-        {m.system_audit_act_export_all()}
-      </Button>
-    </div>
+    <Button
+      color="default"
+      icon={<FileDown size={14} />}
+      onClick={() => setExportsOpen(true)}
+      variant="filled"
+    >
+      {m.system_audit_act_export_records()}
+    </Button>
   );
   const rowSelection: TableProps<AuditLog>["rowSelection"] = {
     onChange: (keys) => setSelected(keys),
@@ -119,15 +108,27 @@ export function AuditPage() {
   };
   const selection: DataTableProps<AuditLog>["selection"] = {
     actions: (
-      <Button
-        color="primary"
-        loading={exportMutation.isPending}
-        onClick={() => exportMutation.mutate({ ids: selected.map(String) })}
-        size="small"
-        variant="filled"
-      >
-        {m.system_audit_act_export_selected()}
-      </Button>
+      <>
+        <Button
+          color="default"
+          disabled={selected.length === 0}
+          loading={exportMutation.isPending}
+          onClick={() => exportMutation.mutate({ ids: selected.map(String) })}
+          size="small"
+          variant="filled"
+        >
+          {m.system_audit_act_export_selected()}
+        </Button>
+        <Button
+          color="default"
+          loading={exportMutation.isPending}
+          onClick={() => exportMutation.mutate({ ids: [] })}
+          size="small"
+          variant="filled"
+        >
+          {m.system_audit_act_export_all()}
+        </Button>
+      </>
     ),
     labels: {
       clear: m.system_audit_export_clear(),
@@ -166,7 +167,10 @@ export function AuditPage() {
               element: canListUsers ? (
                 <Select
                   allowClear
-                  options={Array.from(usersById, ([id, email]) => ({ label: email, value: id }))}
+                  options={Array.from(usersById, ([id, account]) => ({
+                    label: account,
+                    value: id,
+                  }))}
                   placeholder={m.system_audit_filter_actor_ph()}
                   showSearch
                   style={{ width: "100%" }}

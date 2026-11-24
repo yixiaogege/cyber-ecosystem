@@ -10,9 +10,12 @@ import (
 
 	"cyber-ecosystem/app/services/system/internal/conf"
 	"cyber-ecosystem/app/services/system/internal/ent"
+	"cyber-ecosystem/app/services/system/internal/ent/membership"
 	"cyber-ecosystem/app/services/system/internal/ent/permission"
+	"cyber-ecosystem/app/services/system/internal/ent/population"
 	"cyber-ecosystem/app/services/system/internal/ent/principalrole"
 	"cyber-ecosystem/app/services/system/internal/ent/role"
+	"cyber-ecosystem/app/services/system/internal/ent/tenant"
 	"cyber-ecosystem/app/services/system/internal/ent/user"
 	"cyber-ecosystem/app/services/system/internal/platform"
 	"cyber-ecosystem/app/services/system/internal/shared"
@@ -27,28 +30,134 @@ const (
 type Seed struct {
 	log  *slog.Logger
 	plat *platform.Platform
-	cfg  *conf.Authz
+	cfg  *conf.Seed
 }
 
-func NewSeed(cfg *conf.Authz, p *platform.Platform, logger *slog.Logger) (*Seed, error) {
+func NewSeed(cfg *conf.Seed, p *platform.Platform, logger *slog.Logger) (*Seed, error) {
 	return &Seed{log: logger, plat: p, cfg: cfg}, nil
 }
 
 // Run --------------------------------------------------------------------------------------------------------------
 
 func (s *Seed) Run(ctx context.Context) error {
+	if err := s.ensureDefaultTenant(ctx); err != nil {
+		return err
+	}
+	if err := s.ensureDefaultPopulation(ctx); err != nil {
+		return err
+	}
+	if err := s.ensureDeclaredPopulations(ctx); err != nil {
+		return err
+	}
 	return s.seedSuperAdmins(ctx)
 }
 
 // Private -------------------------------------------------------------------------------------------------------------
 
-func (s *Seed) seedSuperAdmins(ctx context.Context) error {
-	// Without this floor a fresh deployment denies every request — including
-	// the RPC that would create the first user — with no way out.
-	if s.cfg == nil || len(s.cfg.GetSuperAdmins()) == 0 {
+func (s *Seed) ensureDefaultPopulation(ctx context.Context) error {
+	client := s.plat.GetClient(ctx)
+	_, err := client.Population.Query().Where(population.Code(security.DefaultPopulation)).Only(ctx)
+	if err == nil {
 		return nil
 	}
-	if s.cfg.GetInitialPassword() == "" {
+	if !ent.IsNotFound(err) {
+		return s.plat.HandleEntError(fmt.Errorf("seed: query default population: %w", err))
+	}
+	if _, err := client.Population.Create().SetCode(security.DefaultPopulation).SetName("User").SetPlane(security.PlaneBackend).Save(ctx); err != nil {
+		if !ent.IsConstraintError(err) {
+			return s.plat.HandleEntError(fmt.Errorf("seed: create default population: %w", err))
+		}
+		if _, err = client.Population.Query().Where(population.Code(security.DefaultPopulation)).Only(ctx); err != nil {
+			return s.plat.HandleEntError(fmt.Errorf("seed: requery default population: %w", err))
+		}
+	}
+	return nil
+}
+
+func (s *Seed) ensureDeclaredPopulations(ctx context.Context) error {
+	if s.cfg == nil {
+		return nil
+	}
+	rows := s.cfg.GetPopulations()
+	if err := ValidateDeclaredPopulations(rows); err != nil {
+		return err
+	}
+	client := s.plat.GetClient(ctx)
+	created := false
+	for _, row := range rows {
+		existing, err := client.Population.Query().Where(population.Code(row.GetCode())).Only(ctx)
+		if err == nil {
+			if existing.Name != row.GetName() || existing.Plane != row.GetPlane() {
+				return fmt.Errorf("seed: declared population %q is %s/%s but the registry holds %s/%s",
+					row.GetCode(), row.GetName(), row.GetPlane(), existing.Name, existing.Plane)
+			}
+			continue
+		}
+		if !ent.IsNotFound(err) {
+			return s.plat.HandleEntError(fmt.Errorf("seed: query declared population %q: %w", row.GetCode(), err))
+		}
+		if _, err := client.Population.Create().
+			SetCode(row.GetCode()).SetName(row.GetName()).SetPlane(row.GetPlane()).
+			Save(ctx); err != nil {
+			if !ent.IsConstraintError(err) {
+				return s.plat.HandleEntError(fmt.Errorf("seed: create declared population %q: %w", row.GetCode(), err))
+			}
+			if _, err = client.Population.Query().Where(population.Code(row.GetCode())).Only(ctx); err != nil {
+				return s.plat.HandleEntError(fmt.Errorf("seed: requery declared population %q: %w", row.GetCode(), err))
+			}
+		}
+		created = true
+	}
+	if created {
+		shared.NotifyPolicyChanged(ctx, s.plat.GetCache(), s.log)
+	}
+	return nil
+}
+
+func ValidateDeclaredPopulations(rows []*conf.Seed_Population) error {
+	seen := make(map[string]bool, len(rows))
+	for _, row := range rows {
+		switch {
+		case row.GetCode() == "":
+			return fmt.Errorf("seed: declared population with an empty code")
+		case row.GetCode() == security.DefaultPopulation:
+			return fmt.Errorf("seed: population %q is seed-born with a fixed shape; redeclaring it is a config error", row.GetCode())
+		case !security.ValidPlane(row.GetPlane()):
+			return fmt.Errorf("seed: declared population %q carries unknown plane %q", row.GetCode(), row.GetPlane())
+		case seen[row.GetCode()]:
+			return fmt.Errorf("seed: population %q declared twice", row.GetCode())
+		}
+		seen[row.GetCode()] = true
+	}
+	return nil
+}
+
+func (s *Seed) ensureDefaultTenant(ctx context.Context) error {
+	client := s.plat.GetClient(ctx)
+	_, err := client.Tenant.Query().Where(tenant.Code(security.DefaultTenant)).Only(ctx)
+	if err == nil {
+		return nil
+	}
+	if !ent.IsNotFound(err) {
+		return s.plat.HandleEntError(fmt.Errorf("seed: query default tenant: %w", err))
+	}
+	if _, err := client.Tenant.Create().SetCode(security.DefaultTenant).SetName("Default").Save(ctx); err != nil {
+		if !ent.IsConstraintError(err) {
+			return s.plat.HandleEntError(fmt.Errorf("seed: create default tenant: %w", err))
+		}
+		if _, err = client.Tenant.Query().Where(tenant.Code(security.DefaultTenant)).Only(ctx); err != nil {
+			return s.plat.HandleEntError(fmt.Errorf("seed: requery default tenant: %w", err))
+		}
+	}
+	return nil
+}
+
+func (s *Seed) seedSuperAdmins(ctx context.Context) error {
+	admins := s.cfg.GetSuperAdmins()
+	if len(admins.GetAccounts()) == 0 {
+		return nil
+	}
+	if admins.GetInitialPassword() == "" {
 		return fmt.Errorf("seed: super_admins configured but initial_password is empty")
 	}
 	client := s.plat.GetClient(ctx)
@@ -61,12 +170,12 @@ func (s *Seed) seedSuperAdmins(ctx context.Context) error {
 	if err := s.ensureSuperGrant(ctx, client, tenant, superRole.ID); err != nil {
 		return err
 	}
-	hash, err := utils.Hash(s.cfg.GetInitialPassword())
+	hash, err := utils.Hash(admins.GetInitialPassword())
 	if err != nil {
 		return fmt.Errorf("seed: hash initial password: %w", err)
 	}
-	for _, email := range s.cfg.GetSuperAdmins() {
-		u, err := s.ensureUser(ctx, client, tenant, email, hash)
+	for _, account := range admins.GetAccounts() {
+		u, err := s.ensureUser(ctx, client, tenant, account, hash)
 		if err != nil {
 			return err
 		}
@@ -74,8 +183,6 @@ func (s *Seed) seedSuperAdmins(ctx context.Context) error {
 			return err
 		}
 	}
-	// Bump + notify so every replica — including this one — recompiles from
-	// the seeded tables.
 	shared.NotifyPolicyChanged(ctx, s.plat.GetCache(), s.log)
 	return nil
 }
@@ -110,31 +217,50 @@ func (s *Seed) ensureSuperGrant(ctx context.Context, client *ent.Client, tenant,
 	}
 	if _, err = client.Permission.Create().SetTenantID(tenant).SetRoleID(roleID).SetOperation(superAdminPattern).SetScopeKind(superAdminScope).Save(ctx); err != nil {
 		if ent.IsConstraintError(err) {
-			return nil // racing replica won the create
+			return nil
 		}
 		return s.plat.HandleEntError(fmt.Errorf("seed: create superadmin grant: %w", err))
 	}
 	return nil
 }
 
-func (s *Seed) ensureUser(ctx context.Context, client *ent.Client, tenant, email, hash string) (*ent.User, error) {
-	u, err := client.User.Query().Where(user.TenantID(tenant), user.Email(email)).Only(ctx)
+func (s *Seed) ensureUser(ctx context.Context, client *ent.Client, tenant, account, hash string) (*ent.User, error) {
+	u, err := client.User.Query().Where(user.Account(account)).Only(ctx)
 	if u != nil {
-		return u, nil // password is owned by admin flows, never reset here
+		return s.ensureSeat(ctx, client, tenant, u) // password is owned by admin flows, never reset here
 	}
 	if !ent.IsNotFound(err) {
-		return nil, s.plat.HandleEntError(fmt.Errorf("seed: query user %q: %w", email, err))
+		return nil, s.plat.HandleEntError(fmt.Errorf("seed: query user %q: %w", account, err))
 	}
-	if u, err = client.User.Create().SetTenantID(tenant).SetEmail(email).SetPasswordHash(hash).Save(ctx); err != nil {
+	if u, err = client.User.Create().SetAccount(account).SetPasswordHash(hash).Save(ctx); err != nil {
 		if ent.IsConstraintError(err) {
-			if u, err = client.User.Query().Where(user.TenantID(tenant), user.Email(email)).Only(ctx); err != nil {
-				return nil, s.plat.HandleEntError(fmt.Errorf("seed: requery user %q: %w", email, err))
+			if u, err = client.User.Query().Where(user.Account(account)).Only(ctx); err != nil {
+				return nil, s.plat.HandleEntError(fmt.Errorf("seed: requery user %q: %w", account, err))
 			}
-			return u, nil // racing replica won the create
+			return s.ensureSeat(ctx, client, tenant, u)
 		}
-		return nil, s.plat.HandleEntError(fmt.Errorf("seed: create user %q: %w", email, err))
+		return nil, s.plat.HandleEntError(fmt.Errorf("seed: create user %q: %w", account, err))
 	}
-	s.log.Info("seed: super admin created", "email", email)
+	s.log.Info("seed: super admin created", "account", account)
+	return s.ensureSeat(ctx, client, tenant, u)
+}
+
+func (s *Seed) ensureSeat(ctx context.Context, client *ent.Client, tenant string, u *ent.User) (*ent.User, error) {
+	n, err := client.Membership.Query().Where(
+		membership.UserID(u.ID), membership.TenantID(tenant), membership.Population(security.DefaultPopulation),
+	).Count(ctx)
+	if err != nil {
+		return nil, s.plat.HandleEntError(fmt.Errorf("seed: query seat for %q: %w", u.Account, err))
+	}
+	if n == 0 {
+		if _, err := client.Membership.Create().
+			SetUserID(u.ID).SetTenantID(tenant).SetPopulation(security.DefaultPopulation).Save(ctx); err != nil {
+			if ent.IsConstraintError(err) {
+				return u, nil
+			}
+			return nil, s.plat.HandleEntError(fmt.Errorf("seed: create seat for %q: %w", u.Account, err))
+		}
+	}
 	return u, nil
 }
 
@@ -152,7 +278,7 @@ func (s *Seed) ensureBinding(ctx context.Context, client *ent.Client, tenant, us
 	}
 	if _, err = client.PrincipalRole.Create().SetTenantID(tenant).SetPrincipalType(shared.PrincipalTypeUser).SetPrincipalID(userID).SetRoleID(roleID).Save(ctx); err != nil {
 		if ent.IsConstraintError(err) {
-			return nil // racing replica won the create
+			return nil
 		}
 		return s.plat.HandleEntError(fmt.Errorf("seed: create binding: %w", err))
 	}

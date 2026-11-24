@@ -9,6 +9,7 @@ import (
 	"cyber-ecosystem/shared-go/utils"
 
 	commonpb "cyber-ecosystem/gen/go/cyber/shared/common/v1"
+	errorspb "cyber-ecosystem/gen/go/cyber/shared/errors/v1"
 
 	"cyber-ecosystem/app/services/agent/internal/ent"
 	"cyber-ecosystem/app/services/agent/internal/ent/chatmessage"
@@ -34,10 +35,11 @@ func (rp *chatRP) FindSessionByID(ctx context.Context, ownerID, sessionID string
 		Where(chatsession.IDEQ(sessionID), chatsession.OwnerIDEQ(ownerID)).
 		Only(ctx)
 	if err != nil {
-		if ent.IsNotFound(err) {
-			return nil, nil
+		err = rp.Platform.HandleEntError(err)
+		if !errorspb.IsInfraErrorDbNotFound(err) {
+			return nil, err
 		}
-		return nil, rp.Platform.HandleEntError(err)
+		return nil, nil
 	}
 	return mapChatSession(d), nil
 }
@@ -104,7 +106,7 @@ func (rp *chatRP) ListSessions(ctx context.Context, ownerID string, page *common
 	query := rp.Platform.GetClient(ctx).ChatSession.Query().
 		Where(chatsession.OwnerIDEQ(ownerID)).
 		Order(ent.Desc(chatsession.FieldUpdatedAt), ent.Desc(chatsession.FieldID))
-	total, offset, limit, err := shared.Paginate(ctx, query, page, helper.DefaultPageSizeMax)
+	total, offset, limit, err := helper.Paginate(ctx, query, page, helper.DefaultPageSizeMax)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +124,7 @@ func (rp *chatRP) ListMessages(ctx context.Context, sessionID string, page *comm
 	query := rp.Platform.GetClient(ctx).ChatMessage.Query().
 		Where(chatmessage.SessionIDEQ(sessionID)).
 		Order(ent.Desc(chatmessage.FieldCreatedAt), ent.Desc(chatmessage.FieldID))
-	total, offset, limit, err := shared.Paginate(ctx, query, page, helper.DefaultPageSizeMax)
+	total, offset, limit, err := helper.Paginate(ctx, query, page, helper.DefaultPageSizeMax)
 	if err != nil {
 		return nil, err
 	}

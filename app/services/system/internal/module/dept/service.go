@@ -78,7 +78,7 @@ func (s *DeptService) DeleteDept(ctx context.Context, in *systempb.DeleteDeptReq
 }
 
 func (s *DeptService) ListDepts(ctx context.Context, in *systempb.ListDeptsRequest) (*systempb.ListDeptsResponse, error) {
-	out, err := s.deptUC.List(ctx, &DeptListIn{
+	out, err := s.deptUC.List(ctx, &ListIn{
 		PageRequest: helper.EnsurePageRequest(in.Page),
 		OrderBy:     in.OrderBy,
 		Name:        in.Name,
@@ -140,7 +140,7 @@ func toProtoDept(d *Dept) *systempb.Dept {
 func toProtoMember(m *DeptMember) *systempb.DeptMember {
 	return &systempb.DeptMember{
 		UserId:  utils.StringW(m.UserID),
-		Email:   utils.StringW(m.Email),
+		Account: utils.StringW(m.Account),
 		Enabled: utils.BoolW(m.Enabled),
 	}
 }

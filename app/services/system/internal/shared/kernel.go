@@ -3,20 +3,40 @@ package shared
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"cyber-ecosystem/app/services/system/internal/platform"
 )
 
-const ExtraEmail = "email"
 const PrincipalTypeUser = "user"
+
+// The super-administrator provisioning vocabulary, shared by the boot seed
+// and the runtime tenant-opening faces — one copy so every writer shapes
+// the same role (no superuser code path exists; the pattern is a grant like
+// any other).
+const (
+	SuperAdminRoleCode = "superadmin"
+	SuperAdminPattern  = "/*"
+	SuperAdminScope    = "all"
+)
 
 type Transaction interface {
 	InTx(ctx context.Context, fn func(context.Context) error) error
 }
 
+type Clock func() time.Time
+
 type HookRegistry interface {
 	OnStart(fn func(context.Context) error)
 	OnStop(fn func(context.Context) error)
+}
+
+type TenantDomainSource interface {
+	ListTenantCodes(ctx context.Context) ([]string, error)
+}
+
+type PasswordPolicy interface {
+	PasswordPolicyError(candidate string) error
 }
 
 // Base ----------------------------------------------------------------------------------------------------------------

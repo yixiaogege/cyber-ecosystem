@@ -25,24 +25,42 @@ type User struct {
 	ID           string
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
-	TenantID     string
 	DeptID       *string
 	Avatar       *string // referenced file id; nil on Update-mask = clear
-	Email        *string
+	Account      *string
 	PasswordHash *string  // biz-only (never in proto); nil on Update = leave unchanged
 	Roles        []string // role codes; list enrichment, filled by List/Get
 	Enabled      bool
+	// Identity projections the roster faces hydrate beside the seat: the
+	// masked phone operators recognize members by, and the wechat binding
+	// fact. Faces that don't hydrate leave them zero — honest absence.
+	PhoneMasked *string
+	WechatBound bool
 }
 
-type UserListIn struct {
+type Credential struct {
+	Kind       string
+	Identifier string
+	UserID     string
+}
+
+type Seat struct {
+	UserID     string
+	TenantID   string
+	Population string
+}
+
+type ListIn struct {
 	*commonpb.PageRequest
-	OrderBy []string
-	Email   *string
-	Enabled *bool
-	DeptID  *string
+	OrderBy    []string
+	Account    *string
+	Enabled    *bool
+	DeptID     *string
+	Population *string
+	UserIDs    []string
 }
 
-type UserListOut struct {
+type ListOut struct {
 	*commonpb.PageResponse
 	List []*User
 }
@@ -54,9 +72,29 @@ type UserRP interface {
 	Update(ctx context.Context, fieldsMask []string, u *User) (*User, error)
 	UpdateStatus(ctx context.Context, id string, enabled bool) (*User, error)
 	Delete(ctx context.Context, id string) (string, error)
-	List(ctx context.Context, in *UserListIn) (*UserListOut, error)
-	FindByEmail(ctx context.Context, email string) (*User, error)
+	List(ctx context.Context, in *ListIn) (*ListOut, error)
+	ListByPopulation(ctx context.Context, in *ListIn) (*ListOut, error)
+	FindByAccount(ctx context.Context, account string) (*User, error)
 	FindByID(ctx context.Context, id string) (*User, error)
+	FindSeated(ctx context.Context, id string) (*User, error)
+	FindSeatedAnyPlane(ctx context.Context, id string) (*User, error)
+	FindByIDs(ctx context.Context, ids []string) (map[string]*User, error)
+	FindCredential(ctx context.Context, kind, identifier string) (*Credential, error)
+	// The kind-agnostic resolution the password login path takes: whatever
+	// kind the identifier bound through, it names its account.
+	FindCredentialByIdentifier(ctx context.Context, identifier string) (*Credential, error)
+	ListCredentialsByUser(ctx context.Context, userID string) ([]*Credential, error)
+	ListCredentialsByUsers(ctx context.Context, userIDs []string) ([]*Credential, error) // the roster hydration's batch twin — one IN query for a whole page
+	CreateCredential(ctx context.Context, c *Credential) error
+	MoveCredential(ctx context.Context, kind, identifier, toUserID string) error
+	// Owner-scoped single-row delete: the unbind leg's writer. Zero matched
+	// rows is a visible miss, never a silent no-op.
+	DeleteCredential(ctx context.Context, kind, identifier, userID string) error
+	CountCredentialsByUser(ctx context.Context, userID string) (int, error)
+	DeleteCredentialsByUser(ctx context.Context, userID string) error
+	EnsureSeat(ctx context.Context, seat *Seat) error
+	DeleteSeatsByUser(ctx context.Context, userID string) error
+	ListSeatsByUser(ctx context.Context, userID string) ([]*Seat, error)
 	FindRoleIDsByCodes(ctx context.Context, codes []string) (map[string]string, error)
 	SetUserRoles(ctx context.Context, userID string, roleIDs []string) error
 	DeleteUserRoles(ctx context.Context, userID string) (bool, error)
@@ -72,47 +110,97 @@ type UserUC struct {
 	userRP UserRP
 	deptRP dept.DeptRP
 	fileRP file.FileRP
+	policy shared.PasswordPolicy
 }
 
-func NewUserUC(logger *slog.Logger, tm shared.Transaction, userRP UserRP, deptRP dept.DeptRP, fileRP file.FileRP) *UserUC {
+func NewUserUC(logger *slog.Logger, tm shared.Transaction, userRP UserRP, deptRP dept.DeptRP, fileRP file.FileRP, policy shared.PasswordPolicy) *UserUC {
 	return &UserUC{
 		UC:     shared.NewUC(logger.With("module", "module/user"), tm),
 		userRP: userRP,
 		deptRP: deptRP,
 		fileRP: fileRP,
+		policy: policy,
 	}
 }
 
 // Method --------------------------------------------------------------------------------------------------------------
 
-func (uc *UserUC) Create(ctx context.Context, email, password, deptID, avatar *string, roles []string) (out *User, err error) {
-	if err = uc.ensureDept(ctx, deptID); err != nil {
-		return nil, err
-	}
-	if err = uc.ensureAvatar(ctx, avatar); err != nil {
-		return nil, err
-	}
-	hash, err := utils.Hash(*password)
-	if err != nil {
-		return nil, errorspb.ErrorGeneralErrorInvalidArgument("").WithCause(fmt.Errorf("password rejected: %w", err))
-	}
+func (uc *UserUC) Create(ctx context.Context, account, password, deptID, avatar *string, roles []string) (out *User, err error) {
 	roleIDs, err := uc.resolveRoles(ctx, roles)
 	if err != nil {
 		return nil, err
 	}
+	// An existing account gains a seat in the creating admin's tenant
+	// instead of a new row; profile params apply only to identity creation.
+	existing, ferr := uc.userRP.FindByAccount(ctx, *account)
+	if ferr != nil && !errorspb.IsInfraErrorDbNotFound(ferr) {
+		return nil, ferr
+	}
+	birth := ferr != nil
+	if birth {
+		if err = uc.ensureDept(ctx, deptID); err != nil {
+			return nil, err
+		}
+		if err = uc.ensureAvatar(ctx, avatar); err != nil {
+			return nil, err
+		}
+		if err := uc.policy.PasswordPolicyError(*password); err != nil {
+			return nil, err
+		}
+		hash, herr := utils.Hash(*password)
+		if herr != nil {
+			return nil, errorspb.ErrorGeneralErrorInvalidArgument("").WithCause(fmt.Errorf("password rejected: %w", herr))
+		}
+		password = &hash
+	} else {
+		out = existing
+	}
+	// The seat lands in the creating admin's tenant; an identity born here
+	// is never seatless. Birth always seats the default population: this
+	// face is the IAM entrance for operator accounts, and a second backend
+	// population is not a declared scenario — member-plane identities arrive
+	// through provider exchange or business import, never here.
+	seat := &Seat{TenantID: security.TenantFromCtx(ctx), Population: security.DefaultPopulation}
+	birthLost := false
 	err = uc.Tm.InTx(ctx, func(ctx context.Context) error {
-		if out, err = uc.userRP.Create(ctx, &User{DeptID: deptID, Avatar: avatar, Email: email, PasswordHash: &hash}); err != nil {
+		if birth {
+			created, cerr := uc.userRP.Create(ctx, &User{DeptID: deptID, Avatar: avatar, Account: account, PasswordHash: password})
+			if cerr != nil {
+				if errorspb.IsInfraErrorDbConstraint(cerr) {
+					birthLost = true
+				}
+				return cerr
+			}
+			out = created
+		}
+		seat.UserID = out.ID
+		if err = uc.userRP.EnsureSeat(ctx, seat); err != nil {
 			return err
 		}
-		return uc.userRP.SetUserRoles(ctx, out.ID, roleIDs)
+		// An empty role ask leaves the identity's bindings untouched — the
+		// seat is the ask, not a binding replace.
+		if len(roleIDs) > 0 {
+			return uc.userRP.SetUserRoles(ctx, out.ID, roleIDs)
+		}
+		return nil
 	})
-	if err == nil && len(roles) > 0 {
+	if err != nil {
+		// The winner exists now, so the same ask lands as its seat.
+		if birthLost {
+			return uc.Create(ctx, account, password, deptID, avatar, roles)
+		}
+		return nil, err
+	}
+	if len(roleIDs) > 0 {
 		uc.userRP.NotifyChanged(ctx)
 	}
 	return
 }
 
 func (uc *UserUC) Update(ctx context.Context, fieldsMask []string, u *User, password *string, roles []string) (out *User, err error) {
+	if _, err = uc.ensureSeatedUser(ctx, u.ID); err != nil {
+		return nil, err
+	}
 	if slices.Contains(fieldsMask, "dept_id") {
 		if err = uc.ensureDept(ctx, u.DeptID); err != nil {
 			return nil, err
@@ -124,6 +212,12 @@ func (uc *UserUC) Update(ctx context.Context, fieldsMask []string, u *User, pass
 		}
 	}
 	if password != nil {
+		// An admin reset also leaves sessions standing — same ruling as
+		// ChangePassword: revocation belongs to disable/delete, not to a
+		// credential rotation.
+		if err := uc.policy.PasswordPolicyError(*password); err != nil {
+			return nil, err
+		}
 		hash, e := utils.Hash(*password)
 		if e != nil {
 			return nil, errorspb.ErrorGeneralErrorInvalidArgument("").WithCause(fmt.Errorf("password rejected: %w", e))
@@ -156,7 +250,9 @@ func (uc *UserUC) UpdateStatus(ctx context.Context, id string, enabled bool) (ou
 	if subject, ok := security.SubjectFromCtx(ctx); ok && !enabled && subject.UserID == id {
 		return nil, systempb.ErrorSystemUserSelfDisable("")
 	}
-	if _, err = uc.userRP.FindByID(ctx, id); err != nil {
+	// Governance reach: every identity seated in the caller's tenant,
+	// member plane included — the plane filter stays a visibility law.
+	if _, err = uc.ensureTenantSeatedUser(ctx, id); err != nil {
 		return nil, err
 	}
 	err = uc.Tm.InTx(ctx, func(ctx context.Context) error {
@@ -177,34 +273,22 @@ func (uc *UserUC) UpdateStatus(ctx context.Context, id string, enabled bool) (ou
 	return out, nil
 }
 
-func (uc *UserUC) ChangePassword(ctx context.Context, oldPassword, newPassword string) error {
-	subject, ok := security.SubjectFromCtx(ctx)
-	if !ok {
-		return errorspb.ErrorGeneralErrorUnauthenticated("").WithCause(fmt.Errorf("change password requires an authenticated caller"))
-	}
-	u, err := uc.userRP.FindByID(ctx, subject.UserID)
-	if err != nil {
-		return err
-	}
-	if !utils.Verify(oldPassword, *u.PasswordHash) {
-		return systempb.ErrorSystemPasswordMismatch("").WithCause(fmt.Errorf("old password mismatch: user %s", subject.UserID))
-	}
-	hash, err := utils.Hash(newPassword)
-	if err != nil {
-		return errorspb.ErrorGeneralErrorInvalidArgument("").WithCause(fmt.Errorf("password rejected: %w", err))
-	}
-	_, err = uc.userRP.Update(ctx, []string{"password"}, &User{ID: subject.UserID, PasswordHash: &hash})
-	return err
-}
-
 func (uc *UserUC) Delete(ctx context.Context, id string) (out string, err error) {
 	if subject, ok := security.SubjectFromCtx(ctx); ok && subject.UserID == id {
 		return "", systempb.ErrorSystemUserSelfDelete("")
 	}
+	if _, err = uc.ensureSeatedUser(ctx, id); err != nil {
+		return "", err
+	}
 	hadRoles := false
 	err = uc.Tm.InTx(ctx, func(ctx context.Context) error {
-		// Bindings go with the user — no orphan principal_role rows.
 		if hadRoles, err = uc.userRP.DeleteUserRoles(ctx, id); err != nil {
+			return err
+		}
+		if err = uc.userRP.DeleteSeatsByUser(ctx, id); err != nil {
+			return err
+		}
+		if err = uc.userRP.DeleteCredentialsByUser(ctx, id); err != nil {
 			return err
 		}
 		out, err = uc.userRP.Delete(ctx, id)
@@ -222,7 +306,13 @@ func (uc *UserUC) Delete(ctx context.Context, id string) (out string, err error)
 	return
 }
 
-func (uc *UserUC) List(ctx context.Context, in *UserListIn) (*UserListOut, error) {
+func (uc *UserUC) ListByPopulation(ctx context.Context, in *ListIn) (*ListOut, error) {
+	// Roster enumeration skips the IAM flavor: a member row carries no
+	// grants to hydrate.
+	return uc.userRP.ListByPopulation(ctx, in)
+}
+
+func (uc *UserUC) List(ctx context.Context, in *ListIn) (*ListOut, error) {
 	out, err := uc.userRP.List(ctx, in)
 	if err != nil {
 		return nil, err
@@ -245,7 +335,7 @@ func (uc *UserUC) List(ctx context.Context, in *UserListIn) (*UserListOut, error
 }
 
 func (uc *UserUC) Get(ctx context.Context, id string) (*User, error) {
-	out, err := uc.userRP.FindByID(ctx, id)
+	out, err := uc.ensureSeatedUser(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -257,7 +347,33 @@ func (uc *UserUC) Get(ctx context.Context, id string) (*User, error) {
 	return out, nil
 }
 
+func (uc *UserUC) BatchGet(ctx context.Context, ids []string) (map[string]*User, error) {
+	return uc.userRP.FindByIDs(ctx, ids)
+}
+
 // Private -------------------------------------------------------------------------------------------------------------
+
+func (uc *UserUC) ensureSeatedUser(ctx context.Context, id string) (*User, error) {
+	u, err := uc.userRP.FindSeated(ctx, id)
+	if err != nil {
+		if errorspb.IsInfraErrorDbNotFound(err) {
+			return nil, systempb.ErrorSystemUserNotFound("")
+		}
+		return nil, err
+	}
+	return u, nil
+}
+
+func (uc *UserUC) ensureTenantSeatedUser(ctx context.Context, id string) (*User, error) {
+	u, err := uc.userRP.FindSeatedAnyPlane(ctx, id)
+	if err != nil {
+		if errorspb.IsInfraErrorDbNotFound(err) {
+			return nil, systempb.ErrorSystemUserNotFound("")
+		}
+		return nil, err
+	}
+	return u, nil
+}
 
 func (uc *UserUC) ensureAvatar(ctx context.Context, avatar *string) error {
 	if avatar == nil {

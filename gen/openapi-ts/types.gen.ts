@@ -18,7 +18,7 @@ export type CyberAgentV1AgentConfigView = {
     createdAt?: string;
     updatedAt?: string;
     userId?: string;
-    userEmail?: string;
+    userAccount?: string;
     userAvatar?: string;
     baseUrl?: string;
     apiKeySet?: boolean;
@@ -178,6 +178,40 @@ export type CyberAgentV1UpdateSessionResponse = {
 };
 
 /**
+ * Pagination request.
+ */
+export type CyberSharedCommonV1PageRequest = {
+    /**
+     * Page number (1-based).
+     */
+    pageNo?: number;
+    /**
+     * Page size.
+     */
+    pageSize?: number;
+    /**
+     * Return all results without pagination.
+     */
+    all?: boolean;
+    /**
+     * Filter by created_at >= this value.
+     */
+    createdAtA?: string;
+    /**
+     * Filter by created_at <= this value.
+     */
+    createdAtZ?: string;
+    /**
+     * Filter by updated_at >= this value.
+     */
+    updatedAtA?: string;
+    /**
+     * Filter by updated_at <= this value.
+     */
+    updatedAtZ?: string;
+};
+
+/**
  * Pagination response.
  */
 export type CyberSharedCommonV1PageResponse = {
@@ -204,6 +238,33 @@ export type CyberSystemV1AbortUploadResponse = {
 };
 
 /**
+ * One row's verdict; the index is the request's own row, 1-based — the
+ * caller maps it back to its file line.
+ */
+export type CyberSystemV1AccountImportResult = {
+    rowIndex?: number;
+    /**
+     * The row's phone as submitted — the operator's own list echoes back, so
+     * the masked form would only blur the line-by-line check.
+     */
+    phone?: string;
+    /**
+     * Present on created and skipped-duplicate — the account's id, the
+     * hydration join key (a skipped row's caller still has a pre-fill to
+     * land against it).
+     */
+    userId?: string;
+    status?: 'ACCOUNT_IMPORT_STATUS_UNSPECIFIED' | 'ACCOUNT_IMPORT_STATUS_CREATED' | 'ACCOUNT_IMPORT_STATUS_SKIPPED_DUPLICATE' | 'ACCOUNT_IMPORT_STATUS_INVALID';
+    /**
+     * Why the row landed where it did — operator-facing, only read on
+     * SKIPPED_DUPLICATE and INVALID; the caller maps every value to its own
+     * locale copy, so a new value is a caller-copy change, never a copy
+     * change on the wire.
+     */
+    reason?: 'ACCOUNT_IMPORT_REASON_UNSPECIFIED' | 'ACCOUNT_IMPORT_REASON_NOT_MAINLAND_MOBILE' | 'ACCOUNT_IMPORT_REASON_DUPLICATE_IN_FILE' | 'ACCOUNT_IMPORT_REASON_PHONE_TAKEN';
+};
+
+/**
  * 最近动态。type 取自 event_log.event_name 词表（register/login/enter_test/
  * complete_test/report_view/report_center_view/share/pay_success/unlock_success/
  * member_activate），前端翻译；content 是 props.text 原文，不翻译。
@@ -212,6 +273,58 @@ export type CyberSystemV1Activity = {
     occurredAt?: string;
     type?: string;
     content?: string;
+};
+
+/**
+ * add-admin
+ */
+export type CyberSystemV1AddTenantAdminRequest = {
+    /**
+     * The tenant the administrator joins — the code CreateTenant took.
+     */
+    tenantCode?: string;
+    /**
+     * An existing account is seated and bound as-is (identity is global,
+     * passwords belong to admin flows); an account that does not exist yet
+     * is created with this password. This is the runtime tenant's break-glass
+     * face — a tenant whose administrators all lost their passwords is never
+     * locked out, the platform admin adds a fresh one from here.
+     */
+    account?: string;
+    /**
+     * Plain on the wire (TLS), strength-enforced server-side by the same
+     * password policy every credential flows through; ignored when the
+     * account already exists.
+     */
+    password?: string;
+};
+
+export type CyberSystemV1AddTenantAdminResponse = {
+    /**
+     * The administrator's user id — created or reused.
+     */
+    userId?: string;
+};
+
+/**
+ * The operator's twin of the member leg: the same machine — provider-
+ * addressed kind, sole-path guard, owner-scoped delete — with the target
+ * named on the wire instead of read from the caller's session.
+ */
+export type CyberSystemV1AdminUnbindCredentialRequest = {
+    /**
+     * The account whose credential this removes — the roster face's user id.
+     */
+    userId?: string;
+    /**
+     * The provider key addresses the credential kind exactly as the bind
+     * legs do; the bound row of that kind is the one this removes.
+     */
+    provider?: string;
+};
+
+export type CyberSystemV1AdminUnbindCredentialResponse = {
+    [key: string]: unknown;
 };
 
 export type CyberSystemV1AuditExport = {
@@ -241,6 +354,87 @@ export type CyberSystemV1AuditLog = {
     ip?: string;
     userAgent?: string;
     denyReason?: string;
+};
+
+/**
+ * batchGet
+ */
+export type CyberSystemV1BatchGetUsersRequest = {
+    /**
+     * max_items matches the page_size cap (shared/common/v1 pagination.proto):
+     * one page of ids hydrates in one call — keep the two in lockstep.
+     */
+    ids?: Array<string>;
+};
+
+export type CyberSystemV1BatchGetUsersResponse = {
+    /**
+     * key = requested id; an absent key = no row or outside the viewer's data
+     * scope — skip semantics, no per-item error channel.
+     */
+    users?: {
+        [key: string]: CyberSystemV1UserBrief;
+    };
+};
+
+export type CyberSystemV1BeginBindCredentialRequest = {
+    provider?: string;
+    redirectUri?: string;
+};
+
+export type CyberSystemV1BeginBindCredentialResponse = {
+    /**
+     * Plain, not a wrapper: a successful begin always mints the redirect —
+     * success implies presence.
+     */
+    authorizeUrl?: string;
+};
+
+export type CyberSystemV1BeginIdentityLoginRequest = {
+    provider?: string;
+    redirectUri?: string;
+    /**
+     * Same-origin post-login target relayed through the authorize hop: the
+     * redirect_uri itself may carry no query (wechat rejects it), so Begin
+     * folds this into the one-shot state it mints. The pattern is the
+     * open-redirect law — a leading slash, never a protocol-relative "//".
+     * The state caps at 128 chars (wechat's own limit), leaving ~45 bytes
+     * for the path once the token takes its share; a next that does not fit
+     * is dropped at mint, never refused — the login then lands on its
+     * completeness branch instead.
+     */
+    next?: string;
+};
+
+export type CyberSystemV1BeginIdentityLoginResponse = {
+    /**
+     * Plain, not a wrapper: a successful begin always mints the redirect —
+     * success implies presence.
+     */
+    authorizeUrl?: string;
+};
+
+export type CyberSystemV1BindCredentialRequest = {
+    provider?: string;
+    wechat?: CyberSystemV1WeChatIdentityPayload;
+    sms?: CyberSystemV1SmsIdentityPayload;
+    /**
+     * The state must be one minted on an authenticated rung (SendBindSmsCode
+     * or BeginBindCredential) and carries the minting session: the exchange
+     * refuses a state born in another session or anonymous, so a phished code
+     * cannot be injected into a foreign bind flow. Login faces accept any
+     * live state of their provider — the code itself is the login proof.
+     */
+    state?: string;
+};
+
+export type CyberSystemV1BindCredentialResponse = {
+    /**
+     * Same shape as the login response's: binding a wechat identity is the
+     * wizard pill's moment — the openid binds and the nickname/avatar arrive
+     * in the same exchange, so the caller fills the form without a second hop.
+     */
+    wechatProfile?: CyberSystemV1WeChatProfile;
 };
 
 /**
@@ -352,6 +546,28 @@ export type CyberSystemV1CreateRoleResponse = {
 };
 
 /**
+ * create
+ */
+export type CyberSystemV1CreateTenantRequest = {
+    /**
+     * The tenant's reference key — memberships and sessions name tenants by
+     * this code, and a code is never reused (a hard-deleted tenant's code
+     * stays burned). "default" is unreachable here in practice: the protected
+     * default row always exists and its code answers 409 like any taken code.
+     */
+    code?: string;
+    name?: string;
+};
+
+export type CyberSystemV1CreateTenantResponse = {
+    /**
+     * The provisioned tenant's id, so the caller can jump to it without a
+     * second read.
+     */
+    id?: string;
+};
+
+/**
  * createUpload
  */
 export type CyberSystemV1CreateUploadRequest = {
@@ -375,7 +591,7 @@ export type CyberSystemV1CreateUploadResponse = {
  * create
  */
 export type CyberSystemV1CreateUserRequest = {
-    email?: string;
+    account?: string;
     password?: string;
     deptId?: string;
     roles?: Array<string>;
@@ -422,7 +638,7 @@ export type CyberSystemV1Dept = {
  */
 export type CyberSystemV1DeptMember = {
     userId?: string;
-    email?: string;
+    account?: string;
     enabled?: boolean;
 };
 
@@ -464,10 +680,6 @@ export type CyberSystemV1ExplainOperationResponse = {
      * "ALLOW" | "DENY".
      */
     verdict?: string;
-    /**
-     * Covered by the session-contract baseline rather than any grant.
-     */
-    builtin?: boolean;
     /**
      * Role bindings held (disabled roles included — they bind but contribute
      * no grants).
@@ -557,6 +769,7 @@ export type CyberSystemV1FunnelStage = {
 export type CyberSystemV1GetCurrentUserResponse = {
     user?: CyberSystemV1User;
     permissions?: Array<string>;
+    memberships?: Array<CyberSystemV1Membership>;
 };
 
 export type CyberSystemV1GetDeptResponse = {
@@ -580,6 +793,15 @@ export type CyberSystemV1GetFileUrlsResponse = {
     };
 };
 
+export type CyberSystemV1GetLoginConfigResponse = {
+    /**
+     * The identity providers the login page may offer, exactly as configured:
+     * an empty list is a wired-but-closed deployment, and the page renders the
+     * account form only — never a dead button.
+     */
+    providers?: Array<CyberSystemV1LoginProvider>;
+};
+
 export type CyberSystemV1GetOverviewResponse = {
     metricCards?: Array<CyberSystemV1MetricCard>;
     funnel?: CyberSystemV1Funnel;
@@ -598,6 +820,20 @@ export type CyberSystemV1GetRoleResponse = {
     grants?: Array<CyberSystemV1RoleGrant>;
 };
 
+/**
+ * The caller's own binding surface: password set or not, and each
+ * credential with a display-masked identifier. The mask is server policy
+ * with one home; clients render what they receive and never re-derive it.
+ */
+export type CyberSystemV1GetSecurityStatusResponse = {
+    hasPassword?: boolean;
+    credentials?: Array<CyberSystemV1SecurityCredential>;
+};
+
+export type CyberSystemV1GetTenantResponse = {
+    tenant?: CyberSystemV1Tenant;
+};
+
 export type CyberSystemV1GetTrendResponse = {
     labels?: Array<string>;
     registrations?: Array<string>;
@@ -606,6 +842,30 @@ export type CyberSystemV1GetTrendResponse = {
 
 export type CyberSystemV1GetUserResponse = {
     user?: CyberSystemV1User;
+};
+
+export type CyberSystemV1ImportAccountRow = {
+    phone?: string;
+};
+
+/**
+ * One file of phones. The contract checks shape only (the sms payload's own
+ * law); which market a number belongs to is the channel's knowledge and
+ * answers per-row invalid below, never a whole-file refusal.
+ */
+export type CyberSystemV1ImportAccountsRequest = {
+    rows?: Array<CyberSystemV1ImportAccountRow>;
+};
+
+export type CyberSystemV1ImportAccountsResponse = {
+    /**
+     * created plus skipped plus invalid is the request's row count — the
+     * ledger closes on every row.
+     */
+    created?: number;
+    skipped?: number;
+    invalid?: number;
+    results?: Array<CyberSystemV1AccountImportResult>;
 };
 
 export type CyberSystemV1Inviter = {
@@ -645,6 +905,11 @@ export type CyberSystemV1ListPoliciesResponse = {
     list?: Array<CyberSystemV1Policy>;
 };
 
+export type CyberSystemV1ListPopulationsResponse = {
+    page?: CyberSharedCommonV1PageResponse;
+    list?: Array<CyberSystemV1Population>;
+};
+
 /**
  * ListResource response.
  */
@@ -669,6 +934,11 @@ export type CyberSystemV1ListRolesResponse = {
     list?: Array<CyberSystemV1Role>;
 };
 
+export type CyberSystemV1ListTenantsResponse = {
+    page?: CyberSharedCommonV1PageResponse;
+    list?: Array<CyberSystemV1Tenant>;
+};
+
 export type CyberSystemV1ListUploadedPartsResponse = {
     file?: CyberSystemV1File;
     /**
@@ -680,14 +950,77 @@ export type CyberSystemV1ListUploadedPartsResponse = {
     expiresAt?: string;
 };
 
+export type CyberSystemV1ListUsersByPopulationRequest = {
+    population?: string;
+    page?: CyberSharedCommonV1PageRequest;
+    /**
+     * Account status; absent lists both.
+     */
+    enabled?: boolean;
+    /**
+     * Exact roster narrowing to these identities; absent or empty = no
+     * narrowing. A caller resolves its own domain-local filters into this
+     * id set first, so filtering, ordering, and pagination all stay at the
+     * query level.
+     */
+    userIds?: Array<string>;
+    orderBy?: Array<string>;
+};
+
+export type CyberSystemV1ListUsersByPopulationResponse = {
+    page?: CyberSharedCommonV1PageResponse;
+    list?: Array<CyberSystemV1User>;
+};
+
 export type CyberSystemV1ListUsersResponse = {
     page?: CyberSharedCommonV1PageResponse;
     list?: Array<CyberSystemV1User>;
 };
 
+export type CyberSystemV1LoginByIdentityRequest = {
+    provider?: string;
+    wechat?: CyberSystemV1WeChatIdentityPayload;
+    sms?: CyberSystemV1SmsIdentityPayload;
+    /**
+     * The state is the one-shot proof a flow began: Begin mints it for
+     * redirect providers, SendSmsCode for direct-code ones; the exchange
+     * consumes it exactly once.
+     */
+    state?: string;
+};
+
+export type CyberSystemV1LoginByIdentityResponse = {
+    /**
+     * Plain, not a wrapper: the call succeeding is the token's presence —
+     * no "succeeded but empty session" shape exists.
+     */
+    sessionToken?: string;
+    issuedAt?: string;
+    expiresAt?: string;
+    /**
+     * The wechat profile when the logged-in identity is wechat and userinfo
+     * came back; the wizard prefills nickname/avatar from it. Absent for every
+     * other identity and for a degraded userinfo fetch alike.
+     */
+    wechatProfile?: CyberSystemV1WeChatProfile;
+};
+
+export type CyberSystemV1LoginProvider = {
+    /**
+     * The configured provider row's key — the value LoginByIdentity expects.
+     */
+    key?: string;
+    /**
+     * The channel kind (wechat_mp, sms): the login page picks its UI shape
+     * per kind.
+     */
+    kind?: string;
+};
+
 export type CyberSystemV1LoginRequest = {
-    email?: string;
+    account?: string;
     password?: string;
+    population?: string;
 };
 
 export type CyberSystemV1LoginResponse = {
@@ -702,6 +1035,15 @@ export type CyberSystemV1LogoutRequest = {
 
 export type CyberSystemV1LogoutResponse = {
     [key: string]: unknown;
+};
+
+/**
+ * Plain scalars by the success-implies-present carve-out: a seat row always
+ * carries its two join keys.
+ */
+export type CyberSystemV1Membership = {
+    tenant?: string;
+    population?: string;
 };
 
 /**
@@ -744,10 +1086,6 @@ export type CyberSystemV1Method = {
      * Method description.
      */
     comment?: string;
-    /**
-     * Session-contract baseline op (cyber.ext.v1.builtin annotation)
-     */
-    builtin?: boolean;
     /**
      * Audience annotation value as declared on the method.
      */
@@ -804,6 +1142,15 @@ export type CyberSystemV1Policy = {
 export type CyberSystemV1PolicyParams = {
     timeWindow?: CyberSystemV1TimeWindowParams;
     calendar?: CyberSystemV1CalendarParams;
+};
+
+export type CyberSystemV1Population = {
+    id?: string;
+    createdAt?: string;
+    updatedAt?: string;
+    code?: string;
+    name?: string;
+    plane?: string;
 };
 
 export type CyberSystemV1PresignedPut = {
@@ -863,6 +1210,25 @@ export type CyberSystemV1RenameFileResponse = {
     [key: string]: unknown;
 };
 
+/**
+ * The proof-carrying password setter for accounts whose only reach is their
+ * phone: the forgot-password leg on the login page and the first-password
+ * leg in account security both land here. The sms code to the account's own
+ * phone is the anti-takeover gate; the state is the one SendSmsCode minted.
+ * The account owning the sms credential is the one rehashed; sessions stay
+ * standing (a rotation is not a revocation).
+ */
+export type CyberSystemV1ResetPasswordRequest = {
+    provider?: string;
+    sms?: CyberSystemV1SmsIdentityPayload;
+    state?: string;
+    newPassword?: string;
+};
+
+export type CyberSystemV1ResetPasswordResponse = {
+    [key: string]: unknown;
+};
+
 export type CyberSystemV1Role = {
     id?: string;
     createdAt?: string;
@@ -897,6 +1263,43 @@ export type CyberSystemV1RoleMember = {
 };
 
 /**
+ * One binding row of the security surface; kind is the credential family
+ * (sms, wechat_mp).
+ */
+export type CyberSystemV1SecurityCredential = {
+    kind?: string;
+    maskedIdentifier?: string;
+};
+
+export type CyberSystemV1SendBindSmsCodeRequest = {
+    provider?: string;
+    phone?: string;
+};
+
+export type CyberSystemV1SendBindSmsCodeResponse = {
+    /**
+     * The one-shot state bound to the calling session; present it at
+     * BindCredential together with the code the phone received. Plain, not a
+     * wrapper: a successful send always mints it — success implies presence.
+     */
+    state?: string;
+};
+
+export type CyberSystemV1SendSmsCodeRequest = {
+    provider?: string;
+    phone?: string;
+};
+
+export type CyberSystemV1SendSmsCodeResponse = {
+    /**
+     * The one-shot state the caller presents at LoginByIdentity — the same
+     * shape Begin mints for redirect flows. Plain, not a wrapper: a
+     * successful send always mints it — success implies presence.
+     */
+    state?: string;
+};
+
+/**
  * RPC service descriptor.
  */
 export type CyberSystemV1Service = {
@@ -927,6 +1330,16 @@ export type CyberSystemV1Service = {
 };
 
 /**
+ * The direct-code payload: the phone the code was sent to plus the code
+ * itself. The contract checks phone shape and code charset only; which
+ * market the phone belongs to is the provider's channel knowledge.
+ */
+export type CyberSystemV1SmsIdentityPayload = {
+    phone?: string;
+    code?: string;
+};
+
+/**
  * Subscribe event response.
  */
 export type CyberSystemV1SubscribeResponse = {
@@ -946,6 +1359,15 @@ export type CyberSystemV1SubscribeResponse = {
      * Event timestamp.
      */
     timestamp?: string;
+};
+
+export type CyberSystemV1Tenant = {
+    id?: string;
+    createdAt?: string;
+    updatedAt?: string;
+    code?: string;
+    name?: string;
+    enabled?: boolean;
 };
 
 /**
@@ -971,6 +1393,18 @@ export type CyberSystemV1TimeWindowParams = {
 export type CyberSystemV1TimeWindowSpan = {
     start?: string;
     end?: string;
+};
+
+export type CyberSystemV1UnbindCredentialRequest = {
+    /**
+     * The provider key addresses the credential kind exactly as the bind
+     * legs do; the bound row of that kind is the one this removes.
+     */
+    provider?: string;
+};
+
+export type CyberSystemV1UnbindCredentialResponse = {
+    [key: string]: unknown;
 };
 
 /**
@@ -1031,11 +1465,22 @@ export type CyberSystemV1UpdateRoleStatusResponse = {
 };
 
 /**
+ * status
+ */
+export type CyberSystemV1UpdateTenantStatusRequest = {
+    id?: string;
+    enabled?: boolean;
+};
+
+export type CyberSystemV1UpdateTenantStatusResponse = {
+    [key: string]: unknown;
+};
+
+/**
  * update
  */
 export type CyberSystemV1UpdateUserRequest = {
     id?: string;
-    email?: string;
     password?: string;
     deptId?: string;
     roles?: Array<string>;
@@ -1114,10 +1559,26 @@ export type CyberSystemV1User = {
     id?: string;
     createdAt?: string;
     updatedAt?: string;
-    email?: string;
+    account?: string;
     deptId?: string;
     roles?: Array<string>;
     enabled?: boolean;
+    avatar?: string;
+    /**
+     * The seat's phone credential, middle-masked (153****0101) — the number
+     * operators recognize members by; the raw digit string never crosses
+     * this face. Null when no phone credential is bound.
+     */
+    phoneMasked?: string;
+    /**
+     * Whether a wechat credential is bound — the identity header's badge.
+     */
+    wechatBound?: boolean;
+};
+
+export type CyberSystemV1UserBrief = {
+    id?: string;
+    account?: string;
     avatar?: string;
 };
 
@@ -1125,7 +1586,9 @@ export type CyberSystemV1VerifySessionResponse = {
     userId?: string;
     tenantId?: string;
     sessionId?: string;
-    email?: string;
+    account?: string;
+    population?: string;
+    plane?: string;
 };
 
 export type CyberSystemV1Viral = {
@@ -1136,6 +1599,26 @@ export type CyberSystemV1Viral = {
     activeUsers?: string;
     kFactor?: number;
     levels?: Array<CyberSystemV1FissionLevel>;
+};
+
+export type CyberSystemV1WeChatIdentityPayload = {
+    /**
+     * OAuth authorization code from the wechat redirect.
+     */
+    code?: string;
+};
+
+/**
+ * What the wechat oauth leg learned about the person behind the openid:
+ * the raw nickname and avatar URL as wechat reports them, present only when
+ * the authorize scope was snsapi_userinfo and the userinfo fetch survived
+ * (a failed fetch degrades to absent, never to a failed login). Values are
+ * wechat's own — sanitising to the nickname rules is the consumer's side of
+ * the wire.
+ */
+export type CyberSystemV1WeChatProfile = {
+    nickname?: string;
+    avatarUrl?: string;
 };
 
 export type AgentConfigAdminServiceListAgentConfigsData = {
@@ -1510,6 +1993,86 @@ export type AuditServiceListAuditExportsResponses = {
 
 export type AuditServiceListAuditExportsResponse = AuditServiceListAuditExportsResponses[keyof AuditServiceListAuditExportsResponses];
 
+export type AuthServiceAdminUnbindCredentialData = {
+    body: CyberSystemV1AdminUnbindCredentialRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/system/auth/admin-unbind-credential';
+};
+
+export type AuthServiceAdminUnbindCredentialResponses = {
+    /**
+     * OK
+     */
+    200: CyberSystemV1AdminUnbindCredentialResponse;
+};
+
+export type AuthServiceAdminUnbindCredentialResponse = AuthServiceAdminUnbindCredentialResponses[keyof AuthServiceAdminUnbindCredentialResponses];
+
+export type AuthServiceBeginBindCredentialData = {
+    body: CyberSystemV1BeginBindCredentialRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/system/auth/begin-bind-credential';
+};
+
+export type AuthServiceBeginBindCredentialResponses = {
+    /**
+     * OK
+     */
+    200: CyberSystemV1BeginBindCredentialResponse;
+};
+
+export type AuthServiceBeginBindCredentialResponse = AuthServiceBeginBindCredentialResponses[keyof AuthServiceBeginBindCredentialResponses];
+
+export type AuthServiceBeginIdentityLoginData = {
+    body: CyberSystemV1BeginIdentityLoginRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/system/auth/begin-identity-login';
+};
+
+export type AuthServiceBeginIdentityLoginResponses = {
+    /**
+     * OK
+     */
+    200: CyberSystemV1BeginIdentityLoginResponse;
+};
+
+export type AuthServiceBeginIdentityLoginResponse = AuthServiceBeginIdentityLoginResponses[keyof AuthServiceBeginIdentityLoginResponses];
+
+export type AuthServiceBindCredentialData = {
+    body: CyberSystemV1BindCredentialRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/system/auth/bind-credential';
+};
+
+export type AuthServiceBindCredentialResponses = {
+    /**
+     * OK
+     */
+    200: CyberSystemV1BindCredentialResponse;
+};
+
+export type AuthServiceBindCredentialResponse = AuthServiceBindCredentialResponses[keyof AuthServiceBindCredentialResponses];
+
+export type AuthServiceImportAccountsData = {
+    body: CyberSystemV1ImportAccountsRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/system/auth/import-accounts';
+};
+
+export type AuthServiceImportAccountsResponses = {
+    /**
+     * OK
+     */
+    200: CyberSystemV1ImportAccountsResponse;
+};
+
+export type AuthServiceImportAccountsResponse = AuthServiceImportAccountsResponses[keyof AuthServiceImportAccountsResponses];
+
 export type AuthServiceLoginData = {
     body: CyberSystemV1LoginRequest;
     path?: never;
@@ -1526,6 +2089,46 @@ export type AuthServiceLoginResponses = {
 
 export type AuthServiceLoginResponse = AuthServiceLoginResponses[keyof AuthServiceLoginResponses];
 
+export type AuthServiceLoginByIdentityData = {
+    body: CyberSystemV1LoginByIdentityRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/system/auth/login-by-identity';
+};
+
+export type AuthServiceLoginByIdentityResponses = {
+    /**
+     * OK
+     */
+    200: CyberSystemV1LoginByIdentityResponse;
+};
+
+export type AuthServiceLoginByIdentityResponse = AuthServiceLoginByIdentityResponses[keyof AuthServiceLoginByIdentityResponses];
+
+export type AuthServiceGetLoginConfigData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The asking page's plane (backend/member): the answer keeps only
+         * providers whose landing population seats that plane — a page never
+         * renders a login that can only mint a session its plane guard would
+         * refuse. Absent = the unfiltered overview.
+         */
+        plane?: string;
+    };
+    url: '/api/v1/system/auth/login-config';
+};
+
+export type AuthServiceGetLoginConfigResponses = {
+    /**
+     * OK
+     */
+    200: CyberSystemV1GetLoginConfigResponse;
+};
+
+export type AuthServiceGetLoginConfigResponse = AuthServiceGetLoginConfigResponses[keyof AuthServiceGetLoginConfigResponses];
+
 export type AuthServiceLogoutData = {
     body: CyberSystemV1LogoutRequest;
     path?: never;
@@ -1541,6 +2144,70 @@ export type AuthServiceLogoutResponses = {
 };
 
 export type AuthServiceLogoutResponse = AuthServiceLogoutResponses[keyof AuthServiceLogoutResponses];
+
+export type AuthServiceResetPasswordData = {
+    body: CyberSystemV1ResetPasswordRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/system/auth/reset-password';
+};
+
+export type AuthServiceResetPasswordResponses = {
+    /**
+     * OK
+     */
+    200: CyberSystemV1ResetPasswordResponse;
+};
+
+export type AuthServiceResetPasswordResponse = AuthServiceResetPasswordResponses[keyof AuthServiceResetPasswordResponses];
+
+export type AuthServiceSendBindSmsCodeData = {
+    body: CyberSystemV1SendBindSmsCodeRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/system/auth/send-bind-sms-code';
+};
+
+export type AuthServiceSendBindSmsCodeResponses = {
+    /**
+     * OK
+     */
+    200: CyberSystemV1SendBindSmsCodeResponse;
+};
+
+export type AuthServiceSendBindSmsCodeResponse = AuthServiceSendBindSmsCodeResponses[keyof AuthServiceSendBindSmsCodeResponses];
+
+export type AuthServiceSendSmsCodeData = {
+    body: CyberSystemV1SendSmsCodeRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/system/auth/send-sms-code';
+};
+
+export type AuthServiceSendSmsCodeResponses = {
+    /**
+     * OK
+     */
+    200: CyberSystemV1SendSmsCodeResponse;
+};
+
+export type AuthServiceSendSmsCodeResponse = AuthServiceSendSmsCodeResponses[keyof AuthServiceSendSmsCodeResponses];
+
+export type AuthServiceUnbindCredentialData = {
+    body: CyberSystemV1UnbindCredentialRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/system/auth/unbind-credential';
+};
+
+export type AuthServiceUnbindCredentialResponses = {
+    /**
+     * OK
+     */
+    200: CyberSystemV1UnbindCredentialResponse;
+};
+
+export type AuthServiceUnbindCredentialResponse = AuthServiceUnbindCredentialResponses[keyof AuthServiceUnbindCredentialResponses];
 
 export type RoleServiceExplainOperationData = {
     body?: never;
@@ -1986,21 +2653,37 @@ export type IntrospectServiceCheckOperationResponses = {
 
 export type IntrospectServiceCheckOperationResponse = IntrospectServiceCheckOperationResponses[keyof IntrospectServiceCheckOperationResponses];
 
-export type UserServiceChangePasswordData = {
+export type AuthServiceChangePasswordData = {
     body: CyberSystemV1ChangePasswordRequest;
     path?: never;
     query?: never;
     url: '/api/v1/system/me/password';
 };
 
-export type UserServiceChangePasswordResponses = {
+export type AuthServiceChangePasswordResponses = {
     /**
      * OK
      */
     200: CyberSystemV1ChangePasswordResponse;
 };
 
-export type UserServiceChangePasswordResponse = UserServiceChangePasswordResponses[keyof UserServiceChangePasswordResponses];
+export type AuthServiceChangePasswordResponse = AuthServiceChangePasswordResponses[keyof AuthServiceChangePasswordResponses];
+
+export type AuthServiceGetSecurityStatusData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/system/me/security';
+};
+
+export type AuthServiceGetSecurityStatusResponses = {
+    /**
+     * OK
+     */
+    200: CyberSystemV1GetSecurityStatusResponse;
+};
+
+export type AuthServiceGetSecurityStatusResponse = AuthServiceGetSecurityStatusResponses[keyof AuthServiceGetSecurityStatusResponses];
 
 export type PolicyServiceListPoliciesData = {
     body?: never;
@@ -2120,6 +2803,54 @@ export type PolicyServiceUpdatePolicyResponses = {
 };
 
 export type PolicyServiceUpdatePolicyResponse = PolicyServiceUpdatePolicyResponses[keyof PolicyServiceUpdatePolicyResponses];
+
+export type PopulationServiceListPopulationsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Page number (1-based).
+         */
+        'page.pageNo'?: number;
+        /**
+         * Page size.
+         */
+        'page.pageSize'?: number;
+        /**
+         * Return all results without pagination.
+         */
+        'page.all'?: boolean;
+        /**
+         * Filter by created_at >= this value.
+         */
+        'page.createdAtA'?: string;
+        /**
+         * Filter by created_at <= this value.
+         */
+        'page.createdAtZ'?: string;
+        /**
+         * Filter by updated_at >= this value.
+         */
+        'page.updatedAtA'?: string;
+        /**
+         * Filter by updated_at <= this value.
+         */
+        'page.updatedAtZ'?: string;
+        code?: string;
+        name?: string;
+        orderBy?: Array<string>;
+    };
+    url: '/api/v1/system/populations';
+};
+
+export type PopulationServiceListPopulationsResponses = {
+    /**
+     * OK
+     */
+    200: CyberSystemV1ListPopulationsResponse;
+};
+
+export type PopulationServiceListPopulationsResponse = PopulationServiceListPopulationsResponses[keyof PopulationServiceListPopulationsResponses];
 
 export type RoleServiceListRolesByPrincipalData = {
     body?: never;
@@ -2360,6 +3091,127 @@ export type RoleServiceRemoveRoleMemberResponses = {
 
 export type RoleServiceRemoveRoleMemberResponse = RoleServiceRemoveRoleMemberResponses[keyof RoleServiceRemoveRoleMemberResponses];
 
+export type TenantServiceListTenantsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Page number (1-based).
+         */
+        'page.pageNo'?: number;
+        /**
+         * Page size.
+         */
+        'page.pageSize'?: number;
+        /**
+         * Return all results without pagination.
+         */
+        'page.all'?: boolean;
+        /**
+         * Filter by created_at >= this value.
+         */
+        'page.createdAtA'?: string;
+        /**
+         * Filter by created_at <= this value.
+         */
+        'page.createdAtZ'?: string;
+        /**
+         * Filter by updated_at >= this value.
+         */
+        'page.updatedAtA'?: string;
+        /**
+         * Filter by updated_at <= this value.
+         */
+        'page.updatedAtZ'?: string;
+        code?: string;
+        name?: string;
+        orderBy?: Array<string>;
+    };
+    url: '/api/v1/system/tenants';
+};
+
+export type TenantServiceListTenantsResponses = {
+    /**
+     * OK
+     */
+    200: CyberSystemV1ListTenantsResponse;
+};
+
+export type TenantServiceListTenantsResponse = TenantServiceListTenantsResponses[keyof TenantServiceListTenantsResponses];
+
+export type TenantServiceCreateTenantData = {
+    body: CyberSystemV1CreateTenantRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/system/tenants';
+};
+
+export type TenantServiceCreateTenantResponses = {
+    /**
+     * OK
+     */
+    200: CyberSystemV1CreateTenantResponse;
+};
+
+export type TenantServiceCreateTenantResponse = TenantServiceCreateTenantResponses[keyof TenantServiceCreateTenantResponses];
+
+export type TenantServiceGetTenantData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/system/tenants/{id}';
+};
+
+export type TenantServiceGetTenantResponses = {
+    /**
+     * OK
+     */
+    200: CyberSystemV1GetTenantResponse;
+};
+
+export type TenantServiceGetTenantResponse = TenantServiceGetTenantResponses[keyof TenantServiceGetTenantResponses];
+
+export type TenantServiceUpdateTenantStatusData = {
+    body: CyberSystemV1UpdateTenantStatusRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/system/tenants/{id}/status';
+};
+
+export type TenantServiceUpdateTenantStatusResponses = {
+    /**
+     * OK
+     */
+    200: CyberSystemV1UpdateTenantStatusResponse;
+};
+
+export type TenantServiceUpdateTenantStatusResponse = TenantServiceUpdateTenantStatusResponses[keyof TenantServiceUpdateTenantStatusResponses];
+
+export type TenantServiceAddTenantAdminData = {
+    body: CyberSystemV1AddTenantAdminRequest;
+    path: {
+        /**
+         * The tenant the administrator joins — the code CreateTenant took.
+         */
+        tenantCode: string;
+    };
+    query?: never;
+    url: '/api/v1/system/tenants/{tenantCode}/admins';
+};
+
+export type TenantServiceAddTenantAdminResponses = {
+    /**
+     * OK
+     */
+    200: CyberSystemV1AddTenantAdminResponse;
+};
+
+export type TenantServiceAddTenantAdminResponse = TenantServiceAddTenantAdminResponses[keyof TenantServiceAddTenantAdminResponses];
+
 export type TransferServiceEchoData = {
     body?: never;
     path?: never;
@@ -2555,7 +3407,7 @@ export type UserServiceListUsersData = {
          * Filter by updated_at <= this value.
          */
         'page.updatedAtZ'?: string;
-        email?: string;
+        account?: string;
         enabled?: boolean;
         deptId?: string;
         orderBy?: Array<string>;
@@ -2587,6 +3439,38 @@ export type UserServiceCreateUserResponses = {
 };
 
 export type UserServiceCreateUserResponse = UserServiceCreateUserResponses[keyof UserServiceCreateUserResponses];
+
+export type UserServiceBatchGetUsersData = {
+    body: CyberSystemV1BatchGetUsersRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/system/users/batch-get';
+};
+
+export type UserServiceBatchGetUsersResponses = {
+    /**
+     * OK
+     */
+    200: CyberSystemV1BatchGetUsersResponse;
+};
+
+export type UserServiceBatchGetUsersResponse = UserServiceBatchGetUsersResponses[keyof UserServiceBatchGetUsersResponses];
+
+export type UserServiceListUsersByPopulationData = {
+    body: CyberSystemV1ListUsersByPopulationRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/system/users/by-population';
+};
+
+export type UserServiceListUsersByPopulationResponses = {
+    /**
+     * OK
+     */
+    200: CyberSystemV1ListUsersByPopulationResponse;
+};
+
+export type UserServiceListUsersByPopulationResponse = UserServiceListUsersByPopulationResponses[keyof UserServiceListUsersByPopulationResponses];
 
 export type UserServiceDeleteUserData = {
     body?: never;
